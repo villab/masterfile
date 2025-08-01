@@ -10,7 +10,7 @@ PASSWORD = st.secrets["sharepoint_pass"]
 ACCESS_KEY = st.secrets["app_password"]  # Contraseña de acceso a la app
 
 SITE_URL = "https://caseonit.sharepoint.com/sites/Sutel"
-LIBRARY_NAME = "Documentos compartidos"
+LIBRARY_NAME = "01. Documentos MedUX/Automatizacion"
 
 # -------------------- SHAREPOINT FUNCTIONS --------------------
 @st.cache_resource
