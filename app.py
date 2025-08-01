@@ -41,21 +41,24 @@ def list_files(ctx, library_name):
         st.error(f"Error al listar archivos en {library_name}: {e}")
         return []
 
-def download_file(ctx, library_name, file_name):
-    """Descarga un archivo desde la biblioteca y lo devuelve en bytes"""
-    try:
-        # Usar solo la ruta relativa al sitio actual
-        file_url = f"/sites/Sutel/{library_name}/{file_name}"
-        
-        buffer = BytesIO()
-        file = ctx.web.get_file_by_server_relative_url(file_url)
-        file.download(buffer)
-        ctx.execute_query()
+if file_choice:
+    file_bytes = download_file(ctx, library_choice, file_choice)
+    
+    if file_bytes:
+        try:
+            df = pd.read_excel(BytesIO(file_bytes))
+            st.success(f"Archivo '{file_choice}' cargado desde SharePoint ✅")
+            
+            if df.empty:
+                st.warning("El archivo está vacío o no tiene datos reconocibles.")
+            else:
+                st.subheader("Vista previa de datos")
+                st.dataframe(df.head(50), use_container_width=True)  # Preview
+        except Exception as e:
+            st.error(f"No se pudo leer el Excel: {e}")
+    else:
+        st.error("No se pudo descargar el archivo desde SharePoint.")
 
-        return buffer.getvalue()
-    except Exception as e:
-        st.error(f"Error al descargar {file_name}: {e}")
-        return None
 
 
 
