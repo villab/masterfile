@@ -44,17 +44,19 @@ def list_files(ctx, library_name):
 def download_file(ctx, library_name, file_name):
     """Descarga un archivo desde la biblioteca y lo devuelve en bytes"""
     try:
-        file_url = f"/sites/MiSitio/{library_name}/{file_name}"
-        file = ctx.web.get_file_by_server_relative_url(file_url)
+        # Usar solo la ruta relativa al sitio actual
+        file_url = f"/sites/Sutel/{library_name}/{file_name}"
         
         buffer = BytesIO()
-        file.download(buffer)  # ahora se pasa un buffer
+        file = ctx.web.get_file_by_server_relative_url(file_url)
+        file.download(buffer)
         ctx.execute_query()
 
         return buffer.getvalue()
     except Exception as e:
         st.error(f"Error al descargar {file_name}: {e}")
         return None
+
 
 
 def upload_file(ctx, library_name, file_name, content):
