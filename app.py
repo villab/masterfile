@@ -42,15 +42,20 @@ def list_files(ctx, library_name):
         return []
 
 def download_file(ctx, library_name, file_name):
-    """Descarga un archivo desde la biblioteca"""
+    """Descarga un archivo desde la biblioteca y lo devuelve en bytes"""
     try:
         file_url = f"/sites/MiSitio/{library_name}/{file_name}"
-        file = ctx.web.get_file_by_server_relative_url(file_url).download()
+        file = ctx.web.get_file_by_server_relative_url(file_url)
+        
+        buffer = BytesIO()
+        file.download(buffer)  # ahora se pasa un buffer
         ctx.execute_query()
-        return file.content
+
+        return buffer.getvalue()
     except Exception as e:
         st.error(f"Error al descargar {file_name}: {e}")
         return None
+
 
 def upload_file(ctx, library_name, file_name, content):
     """Sube o reemplaza un archivo en la biblioteca"""
@@ -63,7 +68,7 @@ def upload_file(ctx, library_name, file_name, content):
 
 # -------------------- LOGIN --------------------
 st.set_page_config(page_title="Gestor Multiusuario XLSX", layout="wide")
-st.title("🔐 Gestor Multiusuario de Datos en SharePoint")
+st.title("🔐 Gestor de Masterfile SUTEL")
 
 password_input = st.text_input("Ingresa la clave de acceso", type="password")
 if password_input != ACCESS_KEY:
