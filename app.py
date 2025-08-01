@@ -128,5 +128,25 @@ if file_choice:
                 st.subheader("Editar datos")
                 edited_df = st.data_editor(filtered_df, num_rows="dynamic", use_container_width=True)
 
-                # -------------------- EXPORTAR --------------------
-                st.su
+              # Exportar
+                st.subheader("Exportar datos editados")
+                def to_excel(df):
+                    output = BytesIO()
+                    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+                        df.to_excel(writer, index=False, sheet_name="Datos Editados")
+                    return output.getvalue()
+
+                excel_data = to_excel(edited_df)
+                st.download_button(
+                    label="📥 Descargar Excel editado",
+                    data=excel_data,
+                    file_name=f"editado_{file_choice}",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+
+                if st.button("💾 Guardar cambios en SharePoint"):
+                    upload_file(ctx, library_choice, file_choice, excel_data)
+                    st.success("Archivo actualizado en SharePoint ✅")
+
+        except Exception as e:
+            st.error(f"No se pudo leer el Excel: {e}")
