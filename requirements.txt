@@ -1,0 +1,5 @@
+streamlit
+pandas
+openpyxl
+xlsxwriter
+Office365-REST-Python-Client
