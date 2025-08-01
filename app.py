@@ -5,11 +5,11 @@ from office365.sharepoint.client_context import ClientContext
 from office365.runtime.auth.user_credential import UserCredential
 
 # -------------------- CONFIG --------------------
-USERNAME = st.secrets["sharepoint_user"]
-PASSWORD = st.secrets["sharepoint_pass"]
-ACCESS_KEY = st.secrets["app_password"]  # Contraseña de acceso a la app
+USERNAME = st.secrets["cesar.leonardo@caseonit.com"]
+PASSWORD = st.secrets["Aguacate?99"]
+ACCESS_KEY = st.secrets["Sutel123"]  # Contraseña de acceso a la app
 
-SITE_URL = "https://tuempresa.sharepoint.com/sites/MiSitio"
+SITE_URL = "https://caseonit.sharepoint.com/sites/Sutel"
 LIBRARY_NAME = "Documentos compartidos"
 
 # -------------------- SHAREPOINT FUNCTIONS --------------------
