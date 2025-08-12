@@ -8,7 +8,6 @@ import os
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
 #------ Configuración de vista de la pagina----------
-
 st.set_page_config(layout="wide") 
 
 # ================== CONFIGURACIÓN ==================
@@ -36,23 +35,31 @@ try:
     df = pd.read_excel(file_stream)
     st.success(f"📂 Cargado  {nombre_archivo} ✅") 
 
-    # Mostrar tabla con scroll y sin paginación
+    # ================== Mostrar tabla editable ==================
     gb = GridOptionsBuilder.from_dataframe(df)
+    gb.configure_default_column(
+        editable=True,  # 🔹 Permitir edición en todas las columnas
+        resizable=True,
+        filter=True,
+        sortable=True
+    )
     gb.configure_pagination(enabled=False)  # ❌ Sin paginación
-    gb.configure_default_column(resizable=True, filter=True, sortable=True)
     grid_options = gb.build()
 
-    AgGrid(
+    grid_response = AgGrid(
         df,
         gridOptions=grid_options,
-        height=500,  # Ajusta la altura
-        fit_columns_on_grid_load=False,  # ❌ No forzar ajuste automático
+        height=500,
+        fit_columns_on_grid_load=False,
         enable_enterprise_modules=False,
-        update_mode=GridUpdateMode.NO_UPDATE,
+        update_mode=GridUpdateMode.VALUE_CHANGED,  # 🔹 Detectar cambios
         allow_unsafe_jscode=True,
-        theme="balham",  # Tema más limpio
-        reload_data=True
+        theme="balham",
+        reload_data=False
     )
+
+    # 🔹 Capturar cambios hechos en la tabla
+    df = pd.DataFrame(grid_response["data"])
 
     # ================== GUARDAR CAMBIOS ==================
     if st.button("💾 Guardar nueva versión de Masterfile"):
@@ -86,5 +93,3 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
-
-
