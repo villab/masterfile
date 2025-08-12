@@ -74,7 +74,7 @@ st.set_page_config(page_title="Gestor Multiusuario XLSX", layout="wide")
 st.title("🔐 Gestor Multiusuario de Datos en SharePoint")
 
 password_input = st.text_input("Ingresa la clave de acceso", type="password")
-if password_input != ACCESS_KEY:
+if password_input != APP_PASSWORD:
     st.warning("Introduce la clave correcta para acceder.")
     st.stop()
 st.success("✅ Acceso concedido")
@@ -153,4 +153,5 @@ if file_choice:
 
         except Exception as e:
             st.error(f"No se pudo leer el Excel: {e}")
+
 
