@@ -5,9 +5,12 @@ from office365.sharepoint.client_context import ClientContext
 from office365.runtime.auth.user_credential import UserCredential
 
 # -------------------- CONFIG --------------------
-USERNAME = st.secrets["sharepoint_user"]        # usuario@dominio.com
-APP_PASSWORD = st.secrets["app_password"]       # contraseña de aplicación de 16 caracteres
+USERNAME = st.secrets["sharepoint_user"]
+APP_PASSWORD = st.secrets["app_password"]
+
 SITE_URL = "https://caseonit.sharepoint.com/sites/Sutel"
+
+
 FOLDER_URL = "/sites/Sutel/Activos del sitio"
 TARGET_FILE = "Masterfile Sutel_28_7_2025.xlsx"
 
@@ -34,4 +37,5 @@ try:
 
 except Exception as e:
     st.error(f"Error al descargar {TARGET_FILE}: {e}")
+
 
