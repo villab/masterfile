@@ -4,43 +4,26 @@ from io import BytesIO
 from office365.sharepoint.client_context import ClientContext
 from office365.runtime.auth.user_credential import UserCredential
 
-# -------------------- CONFIG --------------------
-USERNAME = st.secrets["sharepoint_user"]
-APP_PASSWORD = st.secrets["app_password"]
+# ================== CONFIGURACIÓN ==================
+USERNAME = st.secrets["sharepoint_user"]  # Tu usuario de Office 365
+PASSWORD = st.secrets["sharepoint_pass"]  # Tu contraseña o App Password
 SITE_URL = "https://caseonit.sharepoint.com/sites/Sutel"
 
-# -------------------- CONEXIÓN --------------------
+# Ruta exacta del archivo en SharePoint (server-relative URL)
+FILE_URL = "/sites/Sutel/Documentos compartidos/01. Documentos MedUX/Automatizacion/MasterfileSutel.xlsx"
+
+# ================== CONEXIÓN A SHAREPOINT ==================
 try:
-    ctx = ClientContext(SITE_URL).with_credentials(UserCredential(USERNAME, APP_PASSWORD))
-    web = ctx.web.get().execute_query()
-    st.success(f"Conectado a: {web.properties['Title']}")
+    ctx = ClientContext(SITE_URL).with_credentials(UserCredential(USERNAME, PASSWORD))
+    file = ctx.web.get_file_by_server_relative_url(FILE_URL)
+    file_stream = BytesIO()
+    file.download(file_stream).execute_query()
+    file_stream.seek(0)
+
+    # ================== LECTURA DEL EXCEL ==================
+    df = pd.read_excel(file_stream)
+    st.success("Archivo cargado correctamente desde SharePoint ✅")
+    st.dataframe(df)
+
 except Exception as e:
-    st.error(f"Error de conexión: {e}")
-    st.stop()
-
-# -------------------- FUNCIONES --------------------
-def descargar_excel_sharepoint(file_url):
-    """
-    Descarga un archivo Excel desde SharePoint y lo retorna como DataFrame de pandas.
-    """
-    try:
-        file_obj = BytesIO()
-        ctx.web.get_file_by_server_relative_url(file_url).download(file_obj).execute_query()
-        file_obj.seek(0)
-        return pd.read_excel(file_obj)
-    except Exception as e:
-        st.error(f"Error al descargar el archivo {file_url}: {e}")
-        return None
-
-# -------------------- LÓGICA PRINCIPAL --------------------
-# Ejemplo: ruta relativa del archivo
-file_url = "/sites/Sutel/Activos del sitio/Masterfile Sutel_28_7_2025.xlsx"
-
-df = descargar_excel_sharepoint(file_url)
-
-if df is not None:
-    st.dataframe(df.head())
-    # Aquí puedes seguir con toda la lógica de tu script grande
-    # Ejemplo: filtrados, métricas, transformaciones, etc.
-else:
-    st.warning("No se pudo cargar el archivo desde SharePoint.")
+    st.error(f"Error al descargar el archivo: {e}")
