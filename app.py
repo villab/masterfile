@@ -7,6 +7,8 @@ from office365.runtime.auth.user_credential import UserCredential
 import os
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
+
+st.set_page_config(layout="wide") 
 # ================== CONFIGURACIÓN ==================
 USERNAME = st.secrets["sharepoint_user"]
 APP_PASSWORD = st.secrets["app_password"]
@@ -82,3 +84,4 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
