@@ -7,8 +7,10 @@ from office365.runtime.auth.user_credential import UserCredential
 import os
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
+#------ Configuración de vista de la pagina----------
 
 st.set_page_config(layout="wide") 
+
 # ================== CONFIGURACIÓN ==================
 USERNAME = st.secrets["sharepoint_user"]
 APP_PASSWORD = st.secrets["app_password"]
@@ -32,7 +34,7 @@ try:
 
     # ================== LECTURA DEL EXCEL ==================
     df = pd.read_excel(file_stream)
-    st.success(f"📂 Cargado masterfile del día: {nombre_archivo} ✅") 
+    st.success(f"📂 Cargado  {nombre_archivo} ✅") 
 
     # Mostrar tabla con scroll y sin paginación
     gb = GridOptionsBuilder.from_dataframe(df)
@@ -84,4 +86,5 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
 
