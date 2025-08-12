@@ -5,17 +5,20 @@ from office365.sharepoint.client_context import ClientContext
 from office365.runtime.auth.user_credential import UserCredential
 
 # -------------------- CONFIG --------------------
+#USERNAME = st.secrets["sharepoint_user"]
+#PASSWORD = st.secrets["sharepoint_pass"]
+#ACCESS_KEY = st.secrets["app_password"]
+
 USERNAME = st.secrets["sharepoint_user"]
-PASSWORD = st.secrets["sharepoint_pass"]
-ACCESS_KEY = st.secrets["app_password"]
+APP_PASSWORD = st.secrets["app_password"]
 
 SITE_URL = "https://caseonit.sharepoint.com/sites/Sutel"  # Ajusta a tu sitio real
 
 # -------------------- FUNCIONES SHAREPOINT --------------------
 @st.cache_resource
 def connect_sharepoint():
-    """Conecta a SharePoint usando usuario y contraseña"""
-    return ClientContext(SITE_URL).with_credentials(UserCredential(USERNAME, PASSWORD))
+    """Conecta a SharePoint usando usuario y contraseña de aplicación"""
+    return ClientContext(SITE_URL).with_credentials(UserCredential(USERNAME, APP_PASSWORD))
 
 def list_libraries(ctx):
     """Lista todas las bibliotecas (listas tipo documento) del sitio"""
@@ -150,3 +153,4 @@ if file_choice:
 
         except Exception as e:
             st.error(f"No se pudo leer el Excel: {e}")
+
