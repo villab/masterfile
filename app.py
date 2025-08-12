@@ -1,79 +1,46 @@
 import streamlit as st
 import pandas as pd
-from io import BytesIO
-from datetime import datetime
-from office365.sharepoint.client_context import ClientContext
-from office365.runtime.auth.user_credential import UserCredential
-import os
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+from datetime import datetime
 
-# ================== CONFIGURACIÓN ==================
-USERNAME = st.secrets["sharepoint_user"]
-APP_PASSWORD = st.secrets["app_password"]
+# --- Configuración de página ---
+st.set_page_config(page_title="Masterfile Viewer", layout="wide")
 
-SITE_URL = "https://caseonit.sharepoint.com/sites/Sutel"
-FILE_URL = "/sites/Sutel/Documentos compartidos/01. Documentos MedUX/Automatizacion/MasterfileSutel.xlsx"
-FOLDER_URL = "/sites/Sutel/Documentos compartidos/01. Documentos MedUX/Automatizacion"
-BACKUP_FOLDER_URL = f"{FOLDER_URL}/Backups"
+# --- Cargar el Excel ---
+ruta_excel = "masterfile.xlsx"  # Cambia esto por tu ruta o lógica de carga
+df = pd.read_excel(ruta_excel)
 
-try:
-    ctx = ClientContext(SITE_URL).with_credentials(UserCredential(USERNAME, APP_PASSWORD))
+nombre_archivo = ruta_excel.split("/")[-1]
+st.success(f"Cargado masterfile del día: **{nombre_archivo}**")
 
-    # Obtener solo el nombre del archivo
-    nombre_archivo = os.path.basename(FILE_URL)
+# --- Configurar tabla grande y ancha ---
+gb = GridOptionsBuilder.from_dataframe(df)
+gb.configure_pagination(enabled=False)  # Sin paginación
+gb.configure_default_column(resizable=True, filter=True, sortable=True)  # Columnas filtrables y ordenables
+gb.configure_grid_options(
+    domLayout='autoHeight',             # Ajuste de altura automática
+    suppressSizeToFit=True,             # No comprimir columnas
+    alwaysShowHorizontalScroll=True     # Scroll horizontal
+)
+grid_options = gb.build()
 
-    # Descargar archivo original
-    file = ctx.web.get_file_by_server_relative_url(FILE_URL)
-    file_stream = BytesIO()
-    file.download(file_stream).execute_query()
-    file_stream.seek(0)
+# --- CSS para expandir ancho ---
+st.markdown("""
+    <style>
+    .ag-theme-balham {
+        width: 100% !important;
+        height: 700px !important; /* Ajusta alto si lo deseas */
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-    # ================== LECTURA DEL EXCEL ==================
-    df = pd.read_excel(file_stream)
-    st.success(f"📂 Cargado masterfile del día: {nombre_archivo} ✅") 
-
-    # Configuración de tabla
-    gb = GridOptionsBuilder.from_dataframe(df)
-    gb.configure_pagination(enabled=False)  # ❌ Sin paginación
-    gb.configure_default_column(resizable=True, filter=True, sortable=True)
-    gb.configure_grid_options(domLayout='normal', suppressHorizontalScroll=False, suppressVerticalScroll=False)
-    grid_options = gb.build()
-
-    AgGrid(
-        df,
-        gridOptions=grid_options,
-        height=600,                # más alto
-        width='100%',              # ocupar todo el ancho
-        fit_columns_on_grid_load=False,  # no ajustar automáticamente
-        enable_enterprise_modules=False,
-        update_mode=GridUpdateMode.NO_UPDATE,
-        allow_unsafe_jscode=True,
-        theme="balham",
-        reload_data=True
-    )
-
-    # ================== GUARDAR CAMBIOS ==================
-    if st.button("💾 Guardar nueva versión de Masterfile"):
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        nuevo_nombre = f"MasterfileSutel_{timestamp}.xlsx"
-
-        output_stream = BytesIO()
-        df.to_excel(output_stream, index=False)
-        output_stream.seek(0)
-
-        try:
-            ctx.web.get_folder_by_server_relative_url(BACKUP_FOLDER_URL).expand(["Files"]).get().execute_query()
-        except:
-            ctx.web.folders.add(BACKUP_FOLDER_URL).execute_query()
-
-        backup_folder = ctx.web.get_folder_by_server_relative_url(BACKUP_FOLDER_URL)
-        backup_folder.upload_file(nuevo_nombre, output_stream).execute_query()
-
-        output_stream.seek(0)
-        main_folder = ctx.web.get_folder_by_server_relative_url(FOLDER_URL)
-        main_folder.upload_file("MasterfileSutel.xlsx", output_stream).execute_query()
-
-        st.success(f"✅ Cambios guardados y copia creada en 'Backups' como {nuevo_nombre}")
-
-except Exception as e:
-    st.error(f"Error: {e}")
+# --- Mostrar la tabla ---
+AgGrid(
+    df,
+    gridOptions=grid_options,
+    fit_columns_on_grid_load=False,
+    enable_enterprise_modules=False,
+    update_mode=GridUpdateMode.NO_UPDATE,
+    allow_unsafe_jscode=True,
+    theme="balham"
+)
