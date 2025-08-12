@@ -6,6 +6,7 @@ from office365.sharepoint.client_context import ClientContext
 from office365.runtime.auth.user_credential import UserCredential
 import os
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+from zoneinfo import ZoneInfo
 
 #------ Configuración de vista de la pagina----------
 st.set_page_config(layout="wide") 
@@ -64,7 +65,8 @@ try:
     # ================== GUARDAR CAMBIOS ==================
     if st.button("💾 Guardar nueva versión de Masterfile"):
         # Nombre con fecha y hora (YYYYMMDD_HHMMSS)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        #timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(ZoneInfo("America/Costa_Rica")).strftime("%Y%m%d_%H%M%S")
         nuevo_nombre = f"MasterfileSutel_{timestamp}.xlsx"
 
         # Guardar DataFrame en memoria
@@ -93,3 +95,4 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
