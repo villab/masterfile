@@ -32,49 +32,44 @@ try:
     df = pd.read_excel(file_stream)
     st.success(f"📂 Cargado masterfile del día: {nombre_archivo} ✅") 
 
-    # Mostrar tabla con scroll y sin paginación
+    # Configuración de tabla
     gb = GridOptionsBuilder.from_dataframe(df)
     gb.configure_pagination(enabled=False)  # ❌ Sin paginación
     gb.configure_default_column(resizable=True, filter=True, sortable=True)
+    gb.configure_grid_options(domLayout='normal', suppressHorizontalScroll=False, suppressVerticalScroll=False)
     grid_options = gb.build()
 
     AgGrid(
         df,
         gridOptions=grid_options,
-        height=500,  # Ajusta la altura
-        fit_columns_on_grid_load=False,  # ❌ No forzar ajuste automático
+        height=600,                # más alto
+        width='100%',              # ocupar todo el ancho
+        fit_columns_on_grid_load=False,  # no ajustar automáticamente
         enable_enterprise_modules=False,
         update_mode=GridUpdateMode.NO_UPDATE,
         allow_unsafe_jscode=True,
-        theme="balham",  # Tema más limpio
+        theme="balham",
         reload_data=True
     )
 
     # ================== GUARDAR CAMBIOS ==================
     if st.button("💾 Guardar nueva versión de Masterfile"):
-        # Nombre con fecha y hora (YYYYMMDD_HHMMSS)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         nuevo_nombre = f"MasterfileSutel_{timestamp}.xlsx"
 
-        # Guardar DataFrame en memoria
         output_stream = BytesIO()
         df.to_excel(output_stream, index=False)
         output_stream.seek(0)
 
-        # Verificar o crear carpeta Backups
         try:
             ctx.web.get_folder_by_server_relative_url(BACKUP_FOLDER_URL).expand(["Files"]).get().execute_query()
         except:
             ctx.web.folders.add(BACKUP_FOLDER_URL).execute_query()
 
-        # Subir copia con fecha a Backups
         backup_folder = ctx.web.get_folder_by_server_relative_url(BACKUP_FOLDER_URL)
         backup_folder.upload_file(nuevo_nombre, output_stream).execute_query()
 
-        # Volver a poner el puntero al inicio
         output_stream.seek(0)
-
-        # Sobrescribir el archivo original
         main_folder = ctx.web.get_folder_by_server_relative_url(FOLDER_URL)
         main_folder.upload_file("MasterfileSutel.xlsx", output_stream).execute_query()
 
