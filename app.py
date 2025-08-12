@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 from datetime import datetime
-import os
 from office365.sharepoint.client_context import ClientContext
 from office365.runtime.auth.user_credential import UserCredential
+import os
 
 # ================== CONFIGURACIÓN ==================
 USERNAME = st.secrets["sharepoint_user"]
@@ -29,14 +29,13 @@ try:
 
     # ================== LECTURA DEL EXCEL ==================
     df = pd.read_excel(file_stream)
-    st.success(f"Cargado masterfile del día: {nombre_archivo} ✅") 
-    st.dataframe(df)
+    st.success(f"📂 Cargado masterfile del día: {nombre_archivo} ✅") 
 
     # Mostrar y permitir edición
     edited_df = st.data_editor(df, num_rows="dynamic")
 
     # ================== GUARDAR CAMBIOS ==================
-    if st.button("Guardar nueva versión de Masterfile"):
+    if st.button("💾 Guardar nueva versión de Masterfile"):
         # Nombre con fecha y hora (YYYYMMDD_HHMMSS)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         nuevo_nombre = f"MasterfileSutel_{timestamp}.xlsx"
