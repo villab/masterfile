@@ -17,6 +17,10 @@ BACKUP_FOLDER_URL = f"{FOLDER_URL}/Backups"
 # ================== CONEXIÓN A SHAREPOINT ==================
 try:
     ctx = ClientContext(SITE_URL).with_credentials(UserCredential(USERNAME, APP_PASSWORD))
+
+
+    # Obtener solo el nombre del archivo
+    nombre_archivo = os.path.basename(FILE_URL)
     
     # Descargar archivo original
     file = ctx.web.get_file_by_server_relative_url(FILE_URL)
@@ -26,13 +30,17 @@ try:
 
     # ================== LECTURA DEL EXCEL ==================
     df = pd.read_excel(file_stream)
-    st.success("Archivo cargado correctamente desde SharePoint ✅")
+    st.success(f"Cargado masterfile del día: {nombre_archivo} ✅") 
+    st.dataframe(df)
+
+except Exception as e:
+    st.error(f"Error al descargar el archivo: {e}")
 
     # Mostrar y permitir edición
     edited_df = st.data_editor(df, num_rows="dynamic")
 
     # ================== GUARDAR CAMBIOS ==================
-    if st.button("Guardar cambios y copia con fecha y hora"):
+    if st.button("Guardar nueva versión de Masterfile"):
         # Nombre con fecha y hora (YYYYMMDD_HHMMSS)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         nuevo_nombre = f"MasterfileSutel_{timestamp}.xlsx"
@@ -63,3 +71,4 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
