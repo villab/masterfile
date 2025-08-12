@@ -14,13 +14,10 @@ TARGET_FILE = "Masterfile Sutel_28_7_2025.xlsx"
 # -------------------- CONEXIÓN --------------------
 try:
     ctx = ClientContext(SITE_URL).with_credentials(UserCredential(USERNAME, APP_PASSWORD))
-    web = ctx.web
-    ctx.load(web)
-    ctx.execute_query()
-    st.success(f"Conectado a: {web.properties['Title']}")
+    web = ctx.web.get().execute_query()
+    st.write(f"Conectado a: {web.properties['Title']}")
 except Exception as e:
     st.error(f"Error de conexión: {e}")
-    st.stop()
 
 # -------------------- DESCARGA Y LECTURA --------------------
 try:
@@ -37,3 +34,4 @@ try:
 
 except Exception as e:
     st.error(f"Error al descargar {TARGET_FILE}: {e}")
+
