@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 from datetime import datetime
+import os
 from office365.sharepoint.client_context import ClientContext
 from office365.runtime.auth.user_credential import UserCredential
 
@@ -14,14 +15,12 @@ FILE_URL = "/sites/Sutel/Documentos compartidos/01. Documentos MedUX/Automatizac
 FOLDER_URL = "/sites/Sutel/Documentos compartidos/01. Documentos MedUX/Automatizacion"
 BACKUP_FOLDER_URL = f"{FOLDER_URL}/Backups"
 
-# ================== CONEXIÓN A SHAREPOINT ==================
 try:
     ctx = ClientContext(SITE_URL).with_credentials(UserCredential(USERNAME, APP_PASSWORD))
 
-
     # Obtener solo el nombre del archivo
     nombre_archivo = os.path.basename(FILE_URL)
-    
+
     # Descargar archivo original
     file = ctx.web.get_file_by_server_relative_url(FILE_URL)
     file_stream = BytesIO()
@@ -32,9 +31,6 @@ try:
     df = pd.read_excel(file_stream)
     st.success(f"Cargado masterfile del día: {nombre_archivo} ✅") 
     st.dataframe(df)
-
-except Exception as e:
-    st.error(f"Error al descargar el archivo: {e}")
 
     # Mostrar y permitir edición
     edited_df = st.data_editor(df, num_rows="dynamic")
@@ -71,4 +67,3 @@ except Exception as e:
 
 except Exception as e:
     st.error(f"Error: {e}")
-
