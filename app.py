@@ -7,35 +7,40 @@ from office365.runtime.auth.user_credential import UserCredential
 # -------------------- CONFIG --------------------
 USERNAME = st.secrets["sharepoint_user"]
 APP_PASSWORD = st.secrets["app_password"]
-
 SITE_URL = "https://caseonit.sharepoint.com/sites/Sutel"
-
-
-FOLDER_URL = "/sites/Sutel/Activos del sitio"
-TARGET_FILE = "Masterfile Sutel_28_7_2025.xlsx"
 
 # -------------------- CONEXIÓN --------------------
 try:
     ctx = ClientContext(SITE_URL).with_credentials(UserCredential(USERNAME, APP_PASSWORD))
     web = ctx.web.get().execute_query()
-    st.write(f"Conectado a: {web.properties['Title']}")
+    st.success(f"Conectado a: {web.properties['Title']}")
 except Exception as e:
     st.error(f"Error de conexión: {e}")
+    st.stop()
 
-# -------------------- DESCARGA Y LECTURA --------------------
-try:
-    file_url = f"{FOLDER_URL}/{TARGET_FILE}"
-    file = ctx.web.get_file_by_server_relative_url(file_url).download(BytesIO()).execute_query()
-    file_object = file._io  # BytesIO con el archivo
-    file_object.seek(0)
+# -------------------- FUNCIONES --------------------
+def descargar_excel_sharepoint(file_url):
+    """
+    Descarga un archivo Excel desde SharePoint y lo retorna como DataFrame de pandas.
+    """
+    try:
+        file_obj = BytesIO()
+        ctx.web.get_file_by_server_relative_url(file_url).download(file_obj).execute_query()
+        file_obj.seek(0)
+        return pd.read_excel(file_obj)
+    except Exception as e:
+        st.error(f"Error al descargar el archivo {file_url}: {e}")
+        return None
 
-    # Leer en pandas
-    df = pd.read_excel(file_object)
+# -------------------- LÓGICA PRINCIPAL --------------------
+# Ejemplo: ruta relativa del archivo
+file_url = "/sites/Sutel/Activos del sitio/Masterfile Sutel_28_7_2025.xlsx"
 
-    st.success(f"Archivo '{TARGET_FILE}' descargado correctamente")
-    st.dataframe(df)
+df = descargar_excel_sharepoint(file_url)
 
-except Exception as e:
-    st.error(f"Error al descargar {TARGET_FILE}: {e}")
-
-
+if df is not None:
+    st.dataframe(df.head())
+    # Aquí puedes seguir con toda la lógica de tu script grande
+    # Ejemplo: filtrados, métricas, transformaciones, etc.
+else:
+    st.warning("No se pudo cargar el archivo desde SharePoint.")
