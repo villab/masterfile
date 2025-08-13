@@ -104,7 +104,7 @@ def manejar_archivo(nombre_modo, nombre_archivo):
         if cambios:
             filas_cambiadas = "\n" + "\n".join([f"• {c}" for c in cambios])
         else:
-            filas_cambiadas = "Ninguna fila detectada"
+            filas_cambiadas = "Ningún cambio detectado"
 
         timestamp = datetime.now(ZoneInfo("America/Costa_Rica")).strftime("%Y%m%d_%H%M%S")
         nuevo_nombre = f"{nombre_archivo.replace('.xlsx', '')}_{timestamp}.xlsx"
@@ -161,4 +161,5 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
 
