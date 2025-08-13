@@ -71,6 +71,10 @@ def manejar_archivo(nombre_modo, nombre_archivo):
 
     # Leer Excel original
     df_original = pd.read_excel(file_stream)
+
+    if nombre_modo == "Movilidad" and "ID SONDA" in df_original.columns:
+        df_original["ID SONDA"] = df_original["ID SONDA"].astype(str)
+        
     st.success(f"📂 Cargado {nombre_archivo} ✅")
 
     # Mostrar tabla editable
@@ -161,5 +165,6 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
 
 
