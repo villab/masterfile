@@ -80,6 +80,7 @@ def manejar_archivo(nombre_modo, nombre_archivo):
     # Mostrar tabla editable
     gb = GridOptionsBuilder.from_dataframe(df_original)
     gb.configure_default_column(editable=True, resizable=True, filter=True, sortable=True)
+    gb.configure_grid_options(suppressMovableColumns=True)
     gb.configure_pagination(enabled=False)
     grid_options = gb.build()
 
@@ -165,6 +166,7 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
 
 
 
