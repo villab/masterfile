@@ -21,7 +21,7 @@ USERNAME = st.secrets["sharepoint_user"]
 APP_PASSWORD = st.secrets["app_password"]
 
 SITE_URL = "https://caseonit.sharepoint.com/sites/Sutel"
-FOLDER_URL = "/sites/Sutel/Documentos compartidos/01. Documentos MedUX/Automatizacion"
+FOLDER_URL = "/sites/Sutel/Documentos compartidos/01. Documentos MedUX/Automatizacion/Masterfile"
 
 ARCHIVOS = {
     "Fijo": "MasterfileSutel.xlsx",
@@ -161,3 +161,4 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
