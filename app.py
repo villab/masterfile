@@ -128,8 +128,8 @@ try:
             enviar_correo_con_adjunto(
                 asunto="Nueva versión del Masterfile Sutel Fijo",
                 cuerpo=(
-                    f"Buen día,"
-                    f"Se ha guardado una nueva versión del Masterfile: {nuevo_nombre}\n\n"
+                    f"Buen día,\n\n"
+                    f"Se ha guardado una nueva versión del Masterfile: \n\n {nuevo_nombre}\n\n"
                     f"STM actualizados:{filas_cambiadas}\n\n"
                     f"Un saludo"
                 ),
@@ -142,4 +142,5 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
 
