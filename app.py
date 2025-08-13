@@ -1,111 +1,142 @@
+#VERSION OK CON AJUSTE HORA DE COPIA Y EDICION y envio correo y descripcion de stms modificados
+
+
 import streamlit as st
 import pandas as pd
 from io import BytesIO
 from datetime import datetime
-from zoneinfo import ZoneInfo
-from office365.runtime.auth.user_credential import UserCredential
 from office365.sharepoint.client_context import ClientContext
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
+from office365.runtime.auth.user_credential import UserCredential
 import os
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+from zoneinfo import ZoneInfo
+import smtplib
+from email.message import EmailMessage
 
-# --- Cargar credenciales desde secrets ---
-sharepoint_user = st.secrets["sharepoint_user"]
-app_password = st.secrets["app_password"]
+#------ Configuración de vista de la pagina----------
+st.set_page_config(layout="wide")
+st.title("📋 Masterfile Sutel")
+# ================== CONFIGURACIÓN ==================
+USERNAME = st.secrets["sharepoint_user"]
+APP_PASSWORD = st.secrets["app_password"]
 
-smtp_server = st.secrets["smtp_server"]
-smtp_port = st.secrets["smtp_port"]
-smtp_user = st.secrets["smtp_user"]
-smtp_pass = st.secrets["smtp_pass"]
-email_from = st.secrets["email_from"]
-email_to = st.secrets["email_to"]
+SITE_URL = "https://caseonit.sharepoint.com/sites/Sutel"
+FILE_URL = "/sites/Sutel/Documentos compartidos/01. Documentos MedUX/Automatizacion/MasterfileSutel.xlsx"
+FOLDER_URL = "/sites/Sutel/Documentos compartidos/01. Documentos MedUX/Automatizacion"
+BACKUP_FOLDER_URL = f"{FOLDER_URL}/Backups"
 
-# --- Configuración de SharePoint ---
-SITE_URL = "https://tusitio.sharepoint.com/sites/TuSitio"
-FOLDER_URL = "/sites/TuSitio/Documentos compartidos"
-BACKUP_FOLDER_URL = "/sites/TuSitio/Documentos compartidos/Backups"
+# ================== CONFIG SMTP ==================
+SMTP_SERVER = st.secrets["smtp_server"]
+SMTP_PORT = st.secrets["smtp_port"]
+SMTP_USER = st.secrets["smtp_user"]
+SMTP_PASS = st.secrets["smtp_pass"]
+EMAIL_FROM = st.secrets["email_from"]
+EMAIL_TO = st.secrets["email_to"]  # Puede ser "correo1,correo2" o uno solo
 
-# --- Función para enviar correo ---
 def enviar_correo_con_adjunto(asunto, cuerpo, archivo_bytes, nombre_archivo):
-    mensaje = MIMEMultipart()
-    mensaje["From"] = email_from
-    mensaje["To"] = email_to
-    mensaje["Subject"] = asunto
+    msg = EmailMessage()
+    msg["Subject"] = asunto
+    msg["From"] = EMAIL_FROM
+    msg["To"] = EMAIL_TO
+    msg.set_content(cuerpo)
 
-    mensaje.attach(MIMEText(cuerpo, "plain"))
+    msg.add_attachment(
+        archivo_bytes.getvalue(),
+        maintype="application",
+        subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=nombre_archivo
+    )
 
-    parte = MIMEBase("application", "octet-stream")
-    parte.set_payload(archivo_bytes.read())
-    encoders.encode_base64(parte)
-    parte.add_header("Content-Disposition", f"attachment; filename={nombre_archivo}")
-    mensaje.attach(parte)
+    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as smtp:
+        smtp.starttls()
+        smtp.login(SMTP_USER, SMTP_PASS)
+        smtp.send_message(msg)
 
-    with smtplib.SMTP(smtp_server, smtp_port) as servidor:
-        servidor.starttls()
-        servidor.login(smtp_user, smtp_pass)
-        servidor.sendmail(email_from, email_to.split(","), mensaje.as_string())
+try:
+    ctx = ClientContext(SITE_URL).with_credentials(UserCredential(USERNAME, APP_PASSWORD))
 
-# --- Conexión a SharePoint ---
-ctx = ClientContext(SITE_URL).with_credentials(UserCredential(sharepoint_user, app_password))
+    nombre_archivo = os.path.basename(FILE_URL)
 
-# --- Descargar archivo original ---
-file_url = f"{FOLDER_URL}/MasterfileSutel.xlsx"
-response = ctx.web.get_file_by_server_relative_url(file_url).download().execute_query()
-df_original = pd.read_excel(BytesIO(response.content))
+    # Descargar archivo original
+    file = ctx.web.get_file_by_server_relative_url(FILE_URL)
+    file_stream = BytesIO()
+    file.download(file_stream).execute_query()
+    file_stream.seek(0)
 
-# --- Mostrar en Streamlit ---
-st.title("Editor de Masterfile")
-df_modificado = st.data_editor(df_original, num_rows="dynamic")
+    # Leer Excel original
+    df_original = pd.read_excel(file_stream)
+    st.success(f"📂 Cargado {nombre_archivo} ✅")
 
-if st.button("Guardar cambios"):
-    cambios = []
-    for i in range(len(df_modificado)):
-        if not df_modificado.iloc[i].equals(df_original.iloc[i]):
-            cambios.append(str(df_modificado.iloc[i, 1]))  # Columna 2 (índice 1)
+    # Mostrar tabla editable
+    gb = GridOptionsBuilder.from_dataframe(df_original)
+    gb.configure_default_column(editable=True, resizable=True, filter=True, sortable=True)
+    gb.configure_pagination(enabled=False)
+    grid_options = gb.build()
 
-    if cambios:
-        filas_cambiadas = "\n".join([f"• {c}" for c in cambios])
-    else:
-        filas_cambiadas = "Ninguna fila detectada"
+    grid_response = AgGrid(
+        df_original,
+        gridOptions=grid_options,
+        height=500,
+        fit_columns_on_grid_load=False,
+        enable_enterprise_modules=False,
+        update_mode=GridUpdateMode.VALUE_CHANGED,
+        allow_unsafe_jscode=True,
+        theme="balham",
+        reload_data=False
+    )
 
-    timestamp = datetime.now(ZoneInfo("America/Costa_Rica")).strftime("%Y%m%d_%H%M%S")
-    nuevo_nombre = f"MasterfileSutel_{timestamp}.xlsx"
+    df_modificado = pd.DataFrame(grid_response["data"])
 
-    output_stream = BytesIO()
-    df_modificado.to_excel(output_stream, index=False)
-    output_stream.seek(0)
+    # Guardar cambios
+    if st.button("💾 Guardar nueva versión de Masterfile"):
+        # Detectar cambios y obtener filas modificadas
+        cambios = []
+        for i in range(len(df_modificado)):
+            if not df_modificado.iloc[i].equals(df_original.iloc[i]):
+                cambios.append(str(df_modificado.iloc[i, 1]))  # Columna 2 (índice 1)
 
-    try:
-        ctx.web.get_folder_by_server_relative_url(BACKUP_FOLDER_URL).expand(["Files"]).get().execute_query()
-    except:
-        ctx.web.folders.add(BACKUP_FOLDER_URL).execute_query()
+        # 👉 Convertir a viñetas para el correo
+        if cambios:
+            filas_cambiadas = "\n" + "\n".join([f"• {c}" for c in cambios])
+        else:
+            filas_cambiadas = "Ninguna fila detectada"
 
-    backup_folder = ctx.web.get_folder_by_server_relative_url(BACKUP_FOLDER_URL)
-    backup_folder.upload_file(nuevo_nombre, output_stream).execute_query()
+        timestamp = datetime.now(ZoneInfo("America/Costa_Rica")).strftime("%Y%m%d_%H%M%S")
+        nuevo_nombre = f"MasterfileSutel_{timestamp}.xlsx"
 
-    output_stream.seek(0)
+        output_stream = BytesIO()
+        df_modificado.to_excel(output_stream, index=False)
+        output_stream.seek(0)
 
-    main_folder = ctx.web.get_folder_by_server_relative_url(FOLDER_URL)
-    main_folder.upload_file("MasterfileSutel.xlsx", output_stream).execute_query()
+        try:
+            ctx.web.get_folder_by_server_relative_url(BACKUP_FOLDER_URL).expand(["Files"]).get().execute_query()
+        except:
+            ctx.web.folders.add(BACKUP_FOLDER_URL).execute_query()
 
-    st.success(f"✅ Cambios guardados y copia creada en 'Backups' como {nuevo_nombre}")
+        backup_folder = ctx.web.get_folder_by_server_relative_url(BACKUP_FOLDER_URL)
+        backup_folder.upload_file(nuevo_nombre, output_stream).execute_query()
 
-    # --- Enviar correo ---
-    try:
-        cuerpo = (
-            f"Se ha guardado una nueva versión del Masterfile: {nuevo_nombre}\n\n"
-            f"Filas modificadas (columna 2):\n{filas_cambiadas}"
-        )
+        output_stream.seek(0)
 
-        enviar_correo_con_adjunto(
-            asunto="Nueva versión del Masterfile guardada",
-            cuerpo=cuerpo,
-            archivo_bytes=output_stream,
-            nombre_archivo=nuevo_nombre
-        )
-        st.success("📧 Correo enviado notificando la nueva versión.")
-    except Exception as e:
-        st.error(f"Error al enviar correo: {e}")
+        main_folder = ctx.web.get_folder_by_server_relative_url(FOLDER_URL)
+        main_folder.upload_file("MasterfileSutel.xlsx", output_stream).execute_query()
+
+        st.success(f"✅ Cambios guardados y copia creada en 'Backups' como {nuevo_nombre}")
+
+        # Enviar correo con detalle de fila cambiada (en viñetas)
+        try:
+            enviar_correo_con_adjunto(
+                asunto="Nueva versión del Masterfile guardada",
+                cuerpo=(
+                    f"Se ha guardado una nueva versión del Masterfile: {nuevo_nombre}\n\n"
+                    f"Filas modificadas (columna 2):{filas_cambiadas}"
+                ),
+                archivo_bytes=output_stream,
+                nombre_archivo=nuevo_nombre
+            )
+            st.success("📧 Correo enviado notificando la nueva versión.")
+        except Exception as e:
+            st.error(f"Error al enviar correo: {e}")
+
+except Exception as e:
+    st.error(f"Error: {e}")
