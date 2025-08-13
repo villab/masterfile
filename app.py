@@ -23,12 +23,12 @@ FOLDER_URL = "/sites/Sutel/Documentos compartidos/01. Documentos MedUX/Automatiz
 BACKUP_FOLDER_URL = f"{FOLDER_URL}/Backups"
 
 # ================== CONFIG SMTP ==================
-SMTP_SERVER = st.secrets["smtp_server"]  # Ej: "smtp.gmail.com"
-SMTP_PORT = st.secrets["smtp_port"]      # Ej: 587
+SMTP_SERVER = st.secrets["smtp_server"]
+SMTP_PORT = st.secrets["smtp_port"]
 SMTP_USER = st.secrets["smtp_user"]
 SMTP_PASS = st.secrets["smtp_pass"]
 EMAIL_FROM = st.secrets["email_from"]
-EMAIL_TO = st.secrets["email_to"]  # Puede ser "correo1,correo2" o uno solo
+EMAIL_TO = st.secrets["email_to"]
 
 def enviar_correo_con_adjunto(asunto, cuerpo, archivo_bytes, nombre_archivo):
     msg = EmailMessage()
@@ -37,7 +37,6 @@ def enviar_correo_con_adjunto(asunto, cuerpo, archivo_bytes, nombre_archivo):
     msg["To"] = EMAIL_TO
     msg.set_content(cuerpo)
 
-    # Adjuntar el archivo Excel
     msg.add_attachment(
         archivo_bytes.getvalue(),
         maintype="application",
@@ -53,27 +52,21 @@ def enviar_correo_con_adjunto(asunto, cuerpo, archivo_bytes, nombre_archivo):
 try:
     ctx = ClientContext(SITE_URL).with_credentials(UserCredential(USERNAME, APP_PASSWORD))
 
-    # Obtener solo el nombre del archivo
-    nombre_archivo = os.path.basename(FILE_URL)
-
     # Descargar archivo original
+    nombre_archivo = os.path.basename(FILE_URL)
     file = ctx.web.get_file_by_server_relative_url(FILE_URL)
     file_stream = BytesIO()
     file.download(file_stream).execute_query()
     file_stream.seek(0)
 
-    # ================== LECTURA DEL EXCEL ==================
-    df_original = pd.read_excel(file_stream)  # Guardamos copia original para detectar cambios
+    # Guardar copia original para detectar cambios
+    df_original = pd.read_excel(file_stream)
+
     st.success(f"📂 Cargado  {nombre_archivo} ✅") 
 
-    # ================== Mostrar tabla editable ==================
+    # Mostrar tabla editable
     gb = GridOptionsBuilder.from_dataframe(df_original)
-    gb.configure_default_column(
-        editable=True,
-        resizable=True,
-        filter=True,
-        sortable=True
-    )
+    gb.configure_default_column(editable=True, resizable=True, filter=True, sortable=True)
     gb.configure_pagination(enabled=False)
     grid_options = gb.build()
 
@@ -91,24 +84,8 @@ try:
 
     df_editado = pd.DataFrame(grid_response["data"])
 
-    # ================== GUARDAR CAMBIOS ==================
+    # Guardar cambios
     if st.button("💾 Guardar nueva versión de Masterfile"):
-        # Detectar cambios
-        cambios = []
-        for i in range(len(df_original)):
-            for col in df_original.columns:
-                val_original = df_original.at[i, col]
-                val_editado = df_editado.at[i, col]
-                if pd.isna(val_original) and pd.isna(val_editado):
-                    continue
-                if val_original != val_editado:
-                    cambios.append(f"• Fila {i+1}, Columna '{col}': '{val_original}' → '{val_editado}'")
-
-        if not cambios:
-            st.warning("No se detectaron cambios en el archivo.")
-            return
-
-        # Crear archivo nuevo
         timestamp = datetime.now(ZoneInfo("America/Costa_Rica")).strftime("%Y%m%d_%H%M%S")
         nuevo_nombre = f"MasterfileSutel_{timestamp}.xlsx"
 
@@ -116,7 +93,7 @@ try:
         df_editado.to_excel(output_stream, index=False)
         output_stream.seek(0)
 
-        # Subir copia a carpeta Backups
+        # Crear carpeta de backup si no existe
         try:
             ctx.web.get_folder_by_server_relative_url(BACKUP_FOLDER_URL).expand(["Files"]).get().execute_query()
         except:
@@ -127,18 +104,31 @@ try:
 
         output_stream.seek(0)
 
-        # Subir archivo actualizado
         main_folder = ctx.web.get_folder_by_server_relative_url(FOLDER_URL)
         main_folder.upload_file("MasterfileSutel.xlsx", output_stream).execute_query()
 
         st.success(f"✅ Cambios guardados y copia creada en 'Backups' como {nuevo_nombre}")
 
-        # ================== ENVIAR CORREO ==================
+        # ================== DETECTAR CAMBIOS ==================
+        cambios = []
+        for i in range(len(df_original)):
+            for col in df_original.columns:
+                valor_original = df_original.iloc[i][col]
+                valor_editado = df_editado.iloc[i][col]
+                if pd.isna(valor_original) and pd.isna(valor_editado):
+                    continue
+                if valor_original != valor_editado:
+                    cambios.append(f"Fila {i+1}, Columna '{col}': '{valor_original}' → '{valor_editado}'")
+
+        # Si no hubo cambios
+        if not cambios:
+            cuerpo_correo = f"No se detectaron cambios en {nuevo_nombre}."
+        else:
+            cuerpo_correo = "Se ha guardado una nueva versión del Masterfile con los siguientes cambios:\n\n"
+            cuerpo_correo += "\n".join([f"• {c}" for c in cambios])
+
+        # Enviar correo
         try:
-            cuerpo_correo = (
-                f"Se ha guardado una nueva versión del Masterfile: {nuevo_nombre}\n\n"
-                "Cambios realizados:\n" + "\n".join(cambios)
-            )
             enviar_correo_con_adjunto(
                 asunto="Nueva versión del Masterfile guardada",
                 cuerpo=cuerpo_correo,
