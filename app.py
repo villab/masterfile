@@ -107,10 +107,10 @@ try:
     with tab_movilidad:
         df_movilidad = manejar_archivo("Movilidad", ARCHIVOS["Movilidad"])
 
-    if st.button("💾 Guardar nueva versión de ambos Masterfiles"):
+    if st.button("💾 Guardar nueva versión de Masterfile"):
         timestamp = datetime.now(ZoneInfo("America/Costa_Rica")).strftime("%Y%m%d_%H%M%S")
         archivos_adjuntos = []
-        cuerpo_correo = f"Buen día,\n\nSe han guardado las nuevas versiones de los Masterfiles con fecha {timestamp}.\n\n"
+        cuerpo_correo = f"Buen día,\n\nSe adjunta nueva versión de Masterfile con los cambios realizados el {timestamp}.\n\n"
 
         ctx = ClientContext(SITE_URL).with_credentials(UserCredential(USERNAME, APP_PASSWORD))
 
@@ -134,7 +134,7 @@ try:
             else:
                 filas_cambiadas = "Ningún cambio detectado"
 
-            cuerpo_correo += f"📌 Cambios en {nombre_modo}:\n{filas_cambiadas}\n\n"
+            cuerpo_correo += f"📌 Cambios en entorno {nombre_modo}:\n{filas_cambiadas}\n\n"
 
             nuevo_nombre = f"{nombre_archivo.replace('.xlsx','')}_{timestamp}.xlsx"
             output_stream = BytesIO()
@@ -162,7 +162,7 @@ try:
         # Enviar correo con ambos archivos y viñetas
         try:
             enviar_correo_con_adjuntos(
-                asunto="Nueva versión de Masterfiles Sutel Fijo y Movilidad",
+                asunto="Masterfile Sutel Fijo y Movilidad",
                 cuerpo=cuerpo_correo + "Un saludo",
                 archivos_adjuntos=archivos_adjuntos
             )
@@ -172,3 +172,4 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
