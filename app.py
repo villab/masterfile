@@ -126,10 +126,12 @@ try:
         # Enviar correo con detalle de fila cambiada (en viñetas)
         try:
             enviar_correo_con_adjunto(
-                asunto="Nueva versión del Masterfile guardada",
+                asunto="Nueva versión del Masterfile Sutel Fijo",
                 cuerpo=(
+                    f"Buen día,"
                     f"Se ha guardado una nueva versión del Masterfile: {nuevo_nombre}\n\n"
-                    f"Filas modificadas (columna 2):{filas_cambiadas}"
+                    f"STM actualizados:{filas_cambiadas}\n\n"
+                    f"Un saludo"
                 ),
                 archivo_bytes=output_stream,
                 nombre_archivo=nuevo_nombre
@@ -140,3 +142,4 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
