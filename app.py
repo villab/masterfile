@@ -8,7 +8,8 @@ import os
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 from zoneinfo import ZoneInfo
 import smtplib
-from email.message import EmailMessage
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 #------ Configuración de vista de la pagina----------
 st.set_page_config(layout="wide") 
@@ -17,61 +18,48 @@ st.set_page_config(layout="wide")
 USERNAME = st.secrets["sharepoint_user"]
 APP_PASSWORD = st.secrets["app_password"]
 
-SITE_URL = "https://caseonit.sharepoint.com/sites/Sutel"
-FILE_URL = "/sites/Sutel/Documentos compartidos/01. Documentos MedUX/Automatizacion/MasterfileSutel.xlsx"
-FOLDER_URL = "/sites/Sutel/Documentos compartidos/01. Documentos MedUX/Automatizacion"
-BACKUP_FOLDER_URL = f"{FOLDER_URL}/Backups"
-
-# ================== CONFIG SMTP ==================
 SMTP_SERVER = st.secrets["smtp_server"]
 SMTP_PORT = st.secrets["smtp_port"]
 SMTP_USER = st.secrets["smtp_user"]
 SMTP_PASS = st.secrets["smtp_pass"]
 EMAIL_FROM = st.secrets["email_from"]
-EMAIL_TO = st.secrets["email_to"]
+EMAIL_TO = st.secrets["email_to"].split(",")
 
-def enviar_correo_con_adjunto(asunto, cuerpo, archivo_bytes, nombre_archivo):
-    msg = EmailMessage()
-    msg["Subject"] = asunto
-    msg["From"] = EMAIL_FROM
-    msg["To"] = EMAIL_TO
-    msg.set_content(cuerpo)
-
-    msg.add_attachment(
-        archivo_bytes.getvalue(),
-        maintype="application",
-        subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=nombre_archivo
-    )
-
-    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as smtp:
-        smtp.starttls()
-        smtp.login(SMTP_USER, SMTP_PASS)
-        smtp.send_message(msg)
+SITE_URL = "https://caseonit.sharepoint.com/sites/Sutel"
+FILE_URL = "/sites/Sutel/Documentos compartidos/01. Documentos MedUX/Automatizacion/MasterfileSutel.xlsx"
+FOLDER_URL = "/sites/Sutel/Documentos compartidos/01. Documentos MedUX/Automatizacion"
+BACKUP_FOLDER_URL = f"{FOLDER_URL}/Backups"
 
 try:
     ctx = ClientContext(SITE_URL).with_credentials(UserCredential(USERNAME, APP_PASSWORD))
 
-    # Descargar archivo original
+    # Obtener solo el nombre del archivo
     nombre_archivo = os.path.basename(FILE_URL)
+
+    # Descargar archivo original
     file = ctx.web.get_file_by_server_relative_url(FILE_URL)
     file_stream = BytesIO()
     file.download(file_stream).execute_query()
     file_stream.seek(0)
 
-    # Guardar copia original para detectar cambios
+    # ================== LECTURA DEL EXCEL ==================
     df_original = pd.read_excel(file_stream)
-
+    df = df_original.copy()
     st.success(f"📂 Cargado  {nombre_archivo} ✅") 
 
-    # Mostrar tabla editable
-    gb = GridOptionsBuilder.from_dataframe(df_original)
-    gb.configure_default_column(editable=True, resizable=True, filter=True, sortable=True)
+    # ================== Mostrar tabla editable ==================
+    gb = GridOptionsBuilder.from_dataframe(df)
+    gb.configure_default_column(
+        editable=True,
+        resizable=True,
+        filter=True,
+        sortable=True
+    )
     gb.configure_pagination(enabled=False)
     grid_options = gb.build()
 
     grid_response = AgGrid(
-        df_original,
+        df,
         gridOptions=grid_options,
         height=500,
         fit_columns_on_grid_load=False,
@@ -84,60 +72,69 @@ try:
 
     df_editado = pd.DataFrame(grid_response["data"])
 
-    # Guardar cambios
+    # ================== GUARDAR CAMBIOS ==================
     if st.button("💾 Guardar nueva versión de Masterfile"):
-        timestamp = datetime.now(ZoneInfo("America/Costa_Rica")).strftime("%Y%m%d_%H%M%S")
-        nuevo_nombre = f"MasterfileSutel_{timestamp}.xlsx"
-
-        output_stream = BytesIO()
-        df_editado.to_excel(output_stream, index=False)
-        output_stream.seek(0)
-
-        # Crear carpeta de backup si no existe
-        try:
-            ctx.web.get_folder_by_server_relative_url(BACKUP_FOLDER_URL).expand(["Files"]).get().execute_query()
-        except:
-            ctx.web.folders.add(BACKUP_FOLDER_URL).execute_query()
-
-        backup_folder = ctx.web.get_folder_by_server_relative_url(BACKUP_FOLDER_URL)
-        backup_folder.upload_file(nuevo_nombre, output_stream).execute_query()
-
-        output_stream.seek(0)
-
-        main_folder = ctx.web.get_folder_by_server_relative_url(FOLDER_URL)
-        main_folder.upload_file("MasterfileSutel.xlsx", output_stream).execute_query()
-
-        st.success(f"✅ Cambios guardados y copia creada en 'Backups' como {nuevo_nombre}")
-
-        # ================== DETECTAR CAMBIOS ==================
+        # Detectar cambios
         cambios = []
         for i in range(len(df_original)):
             for col in df_original.columns:
-                valor_original = df_original.iloc[i][col]
-                valor_editado = df_editado.iloc[i][col]
-                if pd.isna(valor_original) and pd.isna(valor_editado):
-                    continue
-                if valor_original != valor_editado:
-                    cambios.append(f"Fila {i+1}, Columna '{col}': '{valor_original}' → '{valor_editado}'")
+                if df_original.at[i, col] != df_editado.at[i, col]:
+                    celda_identificadora = df_original.iloc[i, 1]  # Columna 2
+                    cambios.append(
+                        f"<li><b>{celda_identificadora}</b> → Columna '<i>{col}</i>' cambiado de '<b>{df_original.at[i, col]}</b>' a '<b>{df_editado.at[i, col]}</b>'</li>"
+                    )
 
-        # Si no hubo cambios
-        if not cambios:
-            cuerpo_correo = f"No se detectaron cambios en {nuevo_nombre}."
+        # Guardar si hubo cambios
+        if cambios:
+            timestamp = datetime.now(ZoneInfo("America/Costa_Rica")).strftime("%Y%m%d_%H%M%S")
+            nuevo_nombre = f"MasterfileSutel_{timestamp}.xlsx"
+
+            # Guardar DataFrame en memoria
+            output_stream = BytesIO()
+            df_editado.to_excel(output_stream, index=False)
+            output_stream.seek(0)
+
+            # Verificar o crear carpeta Backups
+            try:
+                ctx.web.get_folder_by_server_relative_url(BACKUP_FOLDER_URL).expand(["Files"]).get().execute_query()
+            except:
+                ctx.web.folders.add(BACKUP_FOLDER_URL).execute_query()
+
+            # Subir copia con fecha a Backups
+            backup_folder = ctx.web.get_folder_by_server_relative_url(BACKUP_FOLDER_URL)
+            backup_folder.upload_file(nuevo_nombre, output_stream).execute_query()
+
+            # Sobrescribir el archivo original
+            output_stream.seek(0)
+            main_folder = ctx.web.get_folder_by_server_relative_url(FOLDER_URL)
+            main_folder.upload_file("MasterfileSutel.xlsx", output_stream).execute_query()
+
+            st.success(f"✅ Cambios guardados y copia creada en 'Backups' como {nuevo_nombre}")
+
+            # ================== ENVIAR CORREO ==================
+            cuerpo_html = f"""
+            <html>
+            <body>
+                <p>Se han realizado los siguientes cambios en el Masterfile:</p>
+                <ul>
+                    {''.join(cambios)}
+                </ul>
+            </body>
+            </html>
+            """
+            msg = MIMEMultipart()
+            msg["From"] = EMAIL_FROM
+            msg["To"] = ", ".join(EMAIL_TO)
+            msg["Subject"] = "Cambios en Masterfile Sutel"
+            msg.attach(MIMEText(cuerpo_html, "html"))
+
+            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+                server.starttls()
+                server.login(SMTP_USER, SMTP_PASS)
+                server.sendmail(EMAIL_FROM, EMAIL_TO, msg.as_string())
+
         else:
-            cuerpo_correo = "Se ha guardado una nueva versión del Masterfile con los siguientes cambios:\n\n"
-            cuerpo_correo += "\n".join([f"• {c}" for c in cambios])
-
-        # Enviar correo
-        try:
-            enviar_correo_con_adjunto(
-                asunto="Nueva versión del Masterfile guardada",
-                cuerpo=cuerpo_correo,
-                archivo_bytes=output_stream,
-                nombre_archivo=nuevo_nombre
-            )
-            st.success("📧 Correo enviado notificando la nueva versión con detalle de cambios.")
-        except Exception as e:
-            st.error(f"Error al enviar correo: {e}")
+            st.info("No se detectaron cambios en el archivo.")
 
 except Exception as e:
     st.error(f"Error: {e}")
