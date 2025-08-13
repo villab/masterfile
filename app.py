@@ -15,7 +15,7 @@ from email.message import EmailMessage
 
 #------ Configuración de vista de la pagina----------
 st.set_page_config(layout="wide")
-st.title("📋 Masterfile Sutel")
+st.title("📋 Masterfile Entorno de medición Fijo")
 # ================== CONFIGURACIÓN ==================
 USERNAME = st.secrets["sharepoint_user"]
 APP_PASSWORD = st.secrets["app_password"]
@@ -142,5 +142,6 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
 
 
