@@ -1,5 +1,4 @@
-#VERSION OK CON AJUSTE HORA DE COPIA Y EDICION y envio correo y descripcion de stms modificados
-
+# VERSION CON SUBCARPETAS DE BACKUP SEPARADAS PARA FIJO Y MOVILIDAD
 
 import streamlit as st
 import pandas as pd
@@ -13,17 +12,21 @@ from zoneinfo import ZoneInfo
 import smtplib
 from email.message import EmailMessage
 
-#------ Configuración de vista de la pagina----------
+# ------ Configuración de vista de la pagina ----------
 st.set_page_config(layout="wide")
-st.title("📋 Masterfile Entorno de medición Fijo")
+st.title("📋 Masterfile Entorno de medición Fijo y Movilidad")
+
 # ================== CONFIGURACIÓN ==================
 USERNAME = st.secrets["sharepoint_user"]
 APP_PASSWORD = st.secrets["app_password"]
 
 SITE_URL = "https://caseonit.sharepoint.com/sites/Sutel"
-FILE_URL = "/sites/Sutel/Documentos compartidos/01. Documentos MedUX/Automatizacion/MasterfileSutel.xlsx"
 FOLDER_URL = "/sites/Sutel/Documentos compartidos/01. Documentos MedUX/Automatizacion"
-BACKUP_FOLDER_URL = f"{FOLDER_URL}/Backups"
+
+ARCHIVOS = {
+    "Fijo": "MasterfileSutel.xlsx",
+    "Movilidad": "MasterfileSutel_Movilidad.xlsx"
+}
 
 # ================== CONFIG SMTP ==================
 SMTP_SERVER = st.secrets["smtp_server"]
@@ -31,7 +34,8 @@ SMTP_PORT = st.secrets["smtp_port"]
 SMTP_USER = st.secrets["smtp_user"]
 SMTP_PASS = st.secrets["smtp_pass"]
 EMAIL_FROM = st.secrets["email_from"]
-EMAIL_TO = st.secrets["email_to"]  # Puede ser "correo1,correo2" o uno solo
+EMAIL_TO = st.secrets["email_to"]
+
 
 def enviar_correo_con_adjunto(asunto, cuerpo, archivo_bytes, nombre_archivo):
     msg = EmailMessage()
@@ -52,10 +56,12 @@ def enviar_correo_con_adjunto(asunto, cuerpo, archivo_bytes, nombre_archivo):
         smtp.login(SMTP_USER, SMTP_PASS)
         smtp.send_message(msg)
 
-try:
+
+def manejar_archivo(nombre_modo, nombre_archivo):
+    """Carga, muestra, permite editar y guardar un archivo específico"""
     ctx = ClientContext(SITE_URL).with_credentials(UserCredential(USERNAME, APP_PASSWORD))
 
-    nombre_archivo = os.path.basename(FILE_URL)
+    FILE_URL = f"{FOLDER_URL}/{nombre_archivo}"
 
     # Descargar archivo original
     file = ctx.web.get_file_by_server_relative_url(FILE_URL)
@@ -88,48 +94,50 @@ try:
     df_modificado = pd.DataFrame(grid_response["data"])
 
     # Guardar cambios
-    if st.button("💾 Guardar nueva versión de Masterfile"):
+    if st.button(f"💾 Guardar nueva versión ({nombre_modo})"):
         # Detectar cambios y obtener filas modificadas
         cambios = []
         for i in range(len(df_modificado)):
             if not df_modificado.iloc[i].equals(df_original.iloc[i]):
                 cambios.append(str(df_modificado.iloc[i, 1]))  # Columna 2 (índice 1)
 
-        # 👉 Convertir a viñetas para el correo
         if cambios:
             filas_cambiadas = "\n" + "\n".join([f"• {c}" for c in cambios])
         else:
             filas_cambiadas = "Ninguna fila detectada"
 
         timestamp = datetime.now(ZoneInfo("America/Costa_Rica")).strftime("%Y%m%d_%H%M%S")
-        nuevo_nombre = f"MasterfileSutel_{timestamp}.xlsx"
+        nuevo_nombre = f"{nombre_archivo.replace('.xlsx', '')}_{timestamp}.xlsx"
 
         output_stream = BytesIO()
         df_modificado.to_excel(output_stream, index=False)
         output_stream.seek(0)
 
+        # ====== Crear carpeta de backup para este tipo ======
+        backup_folder_url = f"{FOLDER_URL}/Backups/{nombre_modo}"
         try:
-            ctx.web.get_folder_by_server_relative_url(BACKUP_FOLDER_URL).expand(["Files"]).get().execute_query()
+            ctx.web.get_folder_by_server_relative_url(backup_folder_url).expand(["Files"]).get().execute_query()
         except:
-            ctx.web.folders.add(BACKUP_FOLDER_URL).execute_query()
+            ctx.web.folders.add(backup_folder_url).execute_query()
 
-        backup_folder = ctx.web.get_folder_by_server_relative_url(BACKUP_FOLDER_URL)
+        # Subir copia a Backups/{Fijo|Movilidad}
+        backup_folder = ctx.web.get_folder_by_server_relative_url(backup_folder_url)
         backup_folder.upload_file(nuevo_nombre, output_stream).execute_query()
 
+        # Subir archivo principal actualizado
         output_stream.seek(0)
-
         main_folder = ctx.web.get_folder_by_server_relative_url(FOLDER_URL)
-        main_folder.upload_file("MasterfileSutel.xlsx", output_stream).execute_query()
+        main_folder.upload_file(nombre_archivo, output_stream).execute_query()
 
-        st.success(f"✅ Cambios guardados y copia creada en 'Backups' como {nuevo_nombre}")
+        st.success(f"✅ Cambios guardados y copia creada en 'Backups/{nombre_modo}' como {nuevo_nombre}")
 
-        # Enviar correo con detalle de fila cambiada (en viñetas)
+        # Enviar correo
         try:
             enviar_correo_con_adjunto(
-                asunto="Nueva versión del Masterfile Sutel Fijo",
+                asunto=f"Nueva versión del Masterfile Sutel {nombre_modo}",
                 cuerpo=(
                     f"Buen día,\n\n"
-                    f"Se ha guardado una nueva versión del Masterfile: \n\n {nuevo_nombre}\n\n"
+                    f"Se ha guardado una nueva versión del Masterfile {nombre_modo}: \n\n {nuevo_nombre}\n\n"
                     f"STM actualizados:{filas_cambiadas}\n\n"
                     f"Un saludo"
                 ),
@@ -140,8 +148,16 @@ try:
         except Exception as e:
             st.error(f"Error al enviar correo: {e}")
 
+
+# ================== INTERFAZ CON PESTAÑAS ==================
+try:
+    tab_fijo, tab_movilidad = st.tabs(["📄 Masterfile Fijo", "📄 Masterfile Movilidad"])
+
+    with tab_fijo:
+        manejar_archivo("Fijo", ARCHIVOS["Fijo"])
+
+    with tab_movilidad:
+        manejar_archivo("Movilidad", ARCHIVOS["Movilidad"])
+
 except Exception as e:
     st.error(f"Error: {e}")
-
-
-
