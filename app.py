@@ -58,6 +58,40 @@ def enviar_correo_con_adjuntos(asunto, cuerpo, archivos_adjuntos):
         smtp.login(SMTP_USER, SMTP_PASS)
         smtp.send_message(msg)
 
+# ========= Helpers para contador persistente en SharePoint =========
+def _leer_contador_hoy(ctx):
+    """Lee el contador de envíos de hoy desde contador_envios.txt en SharePoint.
+    Devuelve (fecha_ddmmaaaa, contador_actual). Si no existe o es otro día, contador=0."""
+    fecha_hoy = datetime.now(ZoneInfo("America/Costa_Rica")).strftime("%d%m%Y")
+    contador_url = f"{FOLDER_URL}/contador_envios.txt"
+    contador_actual = 0
+    try:
+        stream = BytesIO()
+        ctx.web.get_file_by_server_relative_url(contador_url).download(stream).execute_query()
+        stream.seek(0)
+        contenido = stream.read().decode("utf-8").strip()
+        partes = contenido.split(",")
+        if len(partes) == 2:
+            fecha_guardada, cnt = partes
+            if fecha_guardada == fecha_hoy:
+                contador_actual = int(cnt)
+            else:
+                contador_actual = 0
+        else:
+            contador_actual = 0
+    except Exception:
+        # Si no existe el archivo o hay error de lectura, asumimos contador 0.
+        contador_actual = 0
+    return fecha_hoy, contador_actual
+
+def _guardar_contador_hoy(ctx, fecha_ddmmaaaa, nuevo_contador):
+    """Guarda el contador de envíos de hoy en contador_envios.txt en SharePoint."""
+    contenido = f"{fecha_ddmmaaaa},{nuevo_contador}".encode("utf-8")
+    out = BytesIO(contenido)
+    out.seek(0)
+    folder = ctx.web.get_folder_by_server_relative_url(FOLDER_URL)
+    # Sobrescribe o crea el archivo de contador en la misma carpeta del Masterfile
+    folder.upload_file("contador_envios.txt", out).execute_query()
 
 def manejar_archivo(nombre_modo, nombre_archivo):
     """Carga, muestra, permite editar y guardar un archivo específico"""
@@ -95,7 +129,6 @@ def manejar_archivo(nombre_modo, nombre_archivo):
     df_modificado = pd.DataFrame(grid_response["data"])
 
     return df_modificado
-
 
 # ================== INTERFAZ CON PESTAÑAS ==================
 try:
@@ -159,17 +192,28 @@ try:
 
             archivos_adjuntos.append((output_stream, nuevo_nombre))
 
+        # ===== Asunto con fecha ddmmaaaa y versión basada en contador persistente =====
+        # (Primer envío del día SIN versión; desde el segundo: V2, V3, ...)
+        fecha_ddmmaaaa, contador_actual = _leer_contador_hoy(ctx)
+        if contador_actual == 0:
+            asunto_correo = f"Masterfile Sutel Fijo y Movilidad {fecha_ddmmaaaa}"
+            siguiente_contador = 1
+        else:
+            asunto_correo = f"Masterfile Sutel Fijo y Movilidad {fecha_ddmmaaaa} V{contador_actual + 1}"
+            siguiente_contador = contador_actual + 1
+
         # Enviar correo con ambos archivos y viñetas
         try:
             enviar_correo_con_adjuntos(
-                asunto="Masterfile Sutel Fijo y Movilidad",
+                asunto=asunto_correo,
                 cuerpo=cuerpo_correo + "Un saludo",
                 archivos_adjuntos=archivos_adjuntos
             )
+            # Actualizar contador SOLO si el correo se envió correctamente
+            _guardar_contador_hoy(ctx, fecha_ddmmaaaa, siguiente_contador)
             st.success("📧 Correo enviado notificando la nueva versión de ambos Masterfiles.")
         except Exception as e:
             st.error(f"Error al enviar correo: {e}")
 
 except Exception as e:
     st.error(f"Error: {e}")
-
