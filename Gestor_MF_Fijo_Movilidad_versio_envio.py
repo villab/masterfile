@@ -8,7 +8,7 @@ from datetime import datetime
 from office365.sharepoint.client_context import ClientContext
 from office365.runtime.auth.user_credential import UserCredential
 import os
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
 from zoneinfo import ZoneInfo
 import smtplib
 from email.message import EmailMessage
@@ -121,6 +121,7 @@ def manejar_archivo(nombre_modo, nombre_archivo):
         fit_columns_on_grid_load=False,
         enable_enterprise_modules=False,
         update_mode=GridUpdateMode.VALUE_CHANGED,
+        data_return_mode=DataReturnMode.AS_INPUT,
         allow_unsafe_jscode=True,
         theme="balham",
         reload_data=False
@@ -217,3 +218,4 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
