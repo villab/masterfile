@@ -8,7 +8,7 @@ from datetime import datetime
 from office365.sharepoint.client_context import ClientContext
 from office365.runtime.auth.user_credential import UserCredential
 import os
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, JsCode
 from zoneinfo import ZoneInfo
 import smtplib
 from email.message import EmailMessage
@@ -229,5 +229,6 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
 
 
