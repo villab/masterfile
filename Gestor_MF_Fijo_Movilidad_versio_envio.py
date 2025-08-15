@@ -112,6 +112,17 @@ def manejar_archivo(nombre_modo, nombre_archivo):
     gb = GridOptionsBuilder.from_dataframe(df_original)
     gb.configure_default_column(editable=True, resizable=True, filter=True, sortable=True, suppressMovable=True)
     gb.configure_pagination(enabled=False)
+    gb.configure_grid_options(
+        onFirstDataRendered=JsCode("""
+            function(params) {
+                let allColumnIds = [];
+                params.columnApi.getAllColumns().forEach(function(column) {
+                    allColumnIds.push(column.getId());
+                });
+                params.columnApi.autoSizeColumns(allColumnIds);
+            }
+        """)
+    )
     grid_options = gb.build()
 
     grid_response = AgGrid(
@@ -218,4 +229,5 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
 
