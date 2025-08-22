@@ -171,7 +171,7 @@ try:
             df_original = pd.read_excel(df_original_stream, dtype={0: str, 1: str})
 
             # Identificador único de cada fila (ajusta si se llama distinto)
-            id_col = "ID SONDA"
+            id_col = "Sonda"
 
             # Merge original vs modificado por ID
             merged = df_original.merge(
@@ -247,3 +247,4 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
