@@ -163,16 +163,35 @@ try:
             ("Fijo", df_fijo, ARCHIVOS["Fijo"]),
             ("Movilidad", df_movilidad, ARCHIVOS["Movilidad"])
         ]:
-            # Detectar cambios
+            # Detectar cambios SOLO por ediciones reales
             cambios = []
             df_original_stream = BytesIO()
             ctx.web.get_file_by_server_relative_url(f"{FOLDER_URL}/{nombre_archivo}").download(df_original_stream).execute_query()
             df_original_stream.seek(0)
             df_original = pd.read_excel(df_original_stream, dtype={0: str, 1: str})
 
-            for i in range(len(df_modificado)):
-                if not df_modificado.iloc[i].equals(df_original.iloc[i]):
-                    cambios.append(str(df_modificado.iloc[i, 1]))
+            # Identificador único de cada fila (ajusta si se llama distinto)
+            id_col = "ID SONDA"
+
+            # Merge original vs modificado por ID
+            merged = df_original.merge(
+                df_modificado,
+                on=id_col,
+                how="outer",
+                suffixes=("_orig", "_mod")
+            )
+
+            for _, row in merged.iterrows():
+                # Ignorar filas nuevas/eliminadas (opcional)
+                if pd.isna(row[id_col]):
+                    continue
+
+                # Comparar celda por celda
+                for col in df_original.columns:
+                    if col == id_col:
+                        continue
+                    if row[f"{col}_orig"] != row[f"{col}_mod"]:
+                        cambios.append(f"Fila {row[id_col]}: {col} de {row[f'{col}_orig']} → {row[f'{col}_mod']}")
 
             if cambios:
                 filas_cambiadas = "\n" + "\n".join([f"• {c}" for c in cambios])
@@ -181,6 +200,7 @@ try:
 
             cuerpo_correo += f"📌 Cambios en entorno {nombre_modo}:\n{filas_cambiadas}\n\n"
 
+            # Guardar nuevo archivo
             nuevo_nombre = f"{nombre_archivo.replace('.xlsx','')}_{timestamp}.xlsx"
             output_stream = BytesIO()
             df_modificado.to_excel(output_stream, index=False)
@@ -205,7 +225,6 @@ try:
             archivos_adjuntos.append((output_stream, nuevo_nombre))
 
         # ===== Asunto con fecha ddmmaaaa y versión basada en contador persistente =====
-        # (Primer envío del día SIN versión; desde el segundo: V2, V3, ...)
         fecha_ddmmaaaa, contador_actual = _leer_contador_hoy(ctx)
         if contador_actual == 0:
             asunto_correo = f"Masterfile Sutel Fijo y Movilidad {fecha_ddmmaaaa}"
@@ -221,7 +240,6 @@ try:
                 cuerpo=cuerpo_correo + "Un saludo",
                 archivos_adjuntos=archivos_adjuntos
             )
-            # Actualizar contador SOLO si el correo se envió correctamente
             _guardar_contador_hoy(ctx, fecha_ddmmaaaa, siguiente_contador)
             st.success("📧 Correo enviado notificando la nueva versión de ambos Masterfiles.")
         except Exception as e:
@@ -229,6 +247,3 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
-
-
-
