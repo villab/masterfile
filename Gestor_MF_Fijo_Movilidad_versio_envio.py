@@ -65,8 +65,6 @@ def enviar_correo_con_adjuntos(asunto, cuerpo, archivos_adjuntos):
 
 # ========= Contador persistente en SharePoint =========
 def _leer_contador_hoy(ctx):
-    """Lee el contador de envíos de hoy desde contador_envios.txt en SharePoint.
-    Devuelve (fecha_ddmmaaaa, contador_actual). Si no existe o es otro día, contador=0."""
     fecha_hoy = datetime.now(ZoneInfo("America/Costa_Rica")).strftime("%d%m%Y")
     contador_url = f"{FOLDER_URL}/contador_envios.txt"
     contador_actual = 0
@@ -89,7 +87,6 @@ def _leer_contador_hoy(ctx):
     return fecha_hoy, contador_actual
 
 def _guardar_contador_hoy(ctx, fecha_ddmmaaaa, nuevo_contador):
-    """Guarda el contador de envíos de hoy en contador_envios.txt en SharePoint."""
     contenido = f"{fecha_ddmmaaaa},{nuevo_contador}".encode("utf-8")
     out = BytesIO(contenido)
     out.seek(0)
@@ -108,7 +105,6 @@ def drop_phantom_cols(df: pd.DataFrame) -> pd.DataFrame:
     return df.loc[:, ~mask]
 
 def normalize_df_for_compare(df: pd.DataFrame) -> pd.DataFrame:
-    """Convierte todo a strings comparables: trim, NaN -> '', 1.0 ~ 1."""
     if df is None or df.empty:
         return df
     out = df.copy()
@@ -118,7 +114,6 @@ def normalize_df_for_compare(df: pd.DataFrame) -> pd.DataFrame:
         if v is None or (isinstance(v, float) and np.isnan(v)):
             return ""
         s = str(v).strip()
-        # intentar numerico
         try:
             f = float(s.replace(",", ""))
             return str(int(f)) if f.is_integer() else str(f)
@@ -131,54 +126,46 @@ def normalize_df_for_compare(df: pd.DataFrame) -> pd.DataFrame:
 
 # ========= Comparación usando _row_id (fallback por ID SONDA) =========
 def detectar_cambios(df_original: pd.DataFrame, df_modificado: pd.DataFrame) -> list[str]:
-    """Detecta cambios celda a celda ignorando filtros/ordenamientos.
-    Prioridad: compara por _row_id. Si no existe, intenta por ID SONDA."""
     if df_original is None or df_modificado is None or df_original.empty or df_modificado.empty:
         return []
 
-    # limpiar columnas fantasma
     df_o = drop_phantom_cols(df_original).copy()
     df_m = drop_phantom_cols(df_modificado).copy()
 
-    # asegurar existencia de ROWKEY:
     have_rowkey_o = ROWKEY in df_o.columns
     have_rowkey_m = ROWKEY in df_m.columns
 
-    # fallback por ID si no hay rowkey
     use_rowkey = have_rowkey_o and have_rowkey_m
 
     if not use_rowkey and ID_COL not in df_o.columns:
-        # nada que comparar de forma fiable
         return []
 
-    # normalizar para comparar (sin tocar los originales)
     no = normalize_df_for_compare(df_o)
     nm = normalize_df_for_compare(df_m)
 
     if use_rowkey:
-        # Comparar por _row_id
         no_idx = no.set_index(ROWKEY, drop=False)
         nm_idx = nm.set_index(ROWKEY, drop=False)
         comunes = sorted(set(no_idx.index) & set(nm_idx.index))
-        # columnas comunes excepto ROWKEY
         cols = [c for c in no.columns if c in nm.columns and c != ROWKEY]
         cambios = []
         for k in comunes:
             ro = no_idx.loc[k]
             rm = nm_idx.loc[k]
-            # Si hay duplicados de _row_id (no debería), convertir a primera coincidencia
             if isinstance(ro, pd.DataFrame): ro = ro.iloc[0]
             if isinstance(rm, pd.DataFrame): rm = rm.iloc[0]
             for c in cols:
                 if ro[c] != rm[c]:
-                    # Para el reporte, intenta mostrar el identificador lógico si existe
-                    ident = ro.get(ID_COL, k)
-                    cambios.append(f"Fila {ident}: {c} de {ro[c]} → {rm[c]}")
+                    # 🔹 usar STM como identificador si existe
+                    if "STM" in ro.index:
+                        ident = ro["STM"]
+                        cambios.append(f"STM {ident}: {c} de {ro[c]} → {rm[c]}")
+                    else:
+                        ident = ro.get(ID_COL, k)
+                        cambios.append(f"Fila {ident}: {c} de {ro[c]} → {rm[c]}")
         return cambios
 
     else:
-        # Comparar por ID_COL (puede haber duplicados)
-        # Tomamos la primera ocurrencia por ID para simplificar (si necesitas manejar duplicados, lo ampliamos)
         no_idx = no.drop_duplicates(subset=[ID_COL]).set_index(ID_COL, drop=False)
         nm_idx = nm.drop_duplicates(subset=[ID_COL]).set_index(ID_COL, drop=False)
         comunes = sorted(set(no_idx.index) & set(nm_idx.index))
@@ -191,33 +178,31 @@ def detectar_cambios(df_original: pd.DataFrame, df_modificado: pd.DataFrame) -> 
             if isinstance(rm, pd.DataFrame): rm = rm.iloc[0]
             for c in cols:
                 if ro[c] != rm[c]:
-                    cambios.append(f"Fila {k}: {c} de {ro[c]} → {rm[c]}")
+                    if "STM" in ro.index:
+                        ident = ro["STM"]
+                        cambios.append(f"STM {ident}: {c} de {ro[c]} → {rm[c]}")
+                    else:
+                        cambios.append(f"Fila {k}: {c} de {ro[c]} → {rm[c]}")
         return cambios
 
 # ========= Carga/edición (inyecta _row_id oculto) =========
 def manejar_archivo(nombre_modo, nombre_archivo):
-    """Carga, muestra, permite editar y devuelve el DataFrame editado con _row_id."""
     ctx = ClientContext(SITE_URL).with_credentials(UserCredential(USERNAME, APP_PASSWORD))
     FILE_URL = f"{FOLDER_URL}/{nombre_archivo}"
 
-    # Descargar archivo original
     file = ctx.web.get_file_by_server_relative_url(FILE_URL)
     file_stream = BytesIO()
     file.download(file_stream).execute_query()
     file_stream.seek(0)
 
-    # Leer Excel original
     df_original = pd.read_excel(file_stream, dtype={0: str, 1: str})
-    # Inyectar clave de fila estable (no se guarda en SharePoint)
     df_original[ROWKEY] = np.arange(len(df_original)).astype(int).astype(str)
 
     st.success(f"📂 Cargado {nombre_archivo} ✅")
 
-    # Mostrar tabla editable
     gb = GridOptionsBuilder.from_dataframe(df_original)
     gb.configure_default_column(editable=True, resizable=True, filter=True, sortable=True, suppressMovable=True)
     gb.configure_pagination(enabled=False)
-    # Ocultar la clave técnica
     gb.configure_column(ROWKEY, hide=True, editable=False)
     gb.configure_grid_options(
         onFirstDataRendered=JsCode("""
@@ -270,14 +255,12 @@ try:
             ("Fijo", df_fijo, ARCHIVOS["Fijo"]),
             ("Movilidad", df_movilidad, ARCHIVOS["Movilidad"])
         ]:
-            # Releer original (y agregar la misma clave de fila)
             df_original_stream = BytesIO()
             ctx.web.get_file_by_server_relative_url(f"{FOLDER_URL}/{nombre_archivo}").download(df_original_stream).execute_query()
             df_original_stream.seek(0)
             df_original = pd.read_excel(df_original_stream, dtype={0: str, 1: str})
             df_original[ROWKEY] = np.arange(len(df_original)).astype(int).astype(str)
 
-            # Detectar cambios reales (ediciones de celdas)
             cambios = detectar_cambios(df_original, df_modificado)
 
             if cambios:
@@ -287,7 +270,6 @@ try:
 
             cuerpo_correo += f"📌 Cambios en entorno {nombre_modo}:\n{filas_cambiadas}\n\n"
 
-            # Guardar nuevo archivo: NO incluir la columna técnica _row_id
             df_a_guardar = df_modificado.copy()
             if ROWKEY in df_a_guardar.columns:
                 df_a_guardar = df_a_guardar.drop(columns=[ROWKEY])
@@ -297,27 +279,22 @@ try:
             df_a_guardar.to_excel(bytes_excel, index=False)
             bytes_excel.seek(0)
 
-            # Crear carpeta de backup
             backup_folder_url = f"{FOLDER_URL}/Backups/{nombre_modo}"
             try:
                 ctx.web.get_folder_by_server_relative_url(backup_folder_url).expand(["Files"]).get().execute_query()
             except:
                 ctx.web.folders.add(backup_folder_url).execute_query()
 
-            # Subir copia a Backup
             backup_folder = ctx.web.get_folder_by_server_relative_url(backup_folder_url)
             backup_folder.upload_file(nuevo_nombre, bytes_excel).execute_query()
 
-            # Subir archivo principal actualizado
             bytes_excel.seek(0)
             main_folder = ctx.web.get_folder_by_server_relative_url(FOLDER_URL)
             main_folder.upload_file(nombre_archivo, bytes_excel).execute_query()
 
-            # Adjuntar para correo (usar copia fresca del buffer)
             bytes_excel.seek(0)
             archivos_adjuntos.append((BytesIO(bytes_excel.getvalue()), nuevo_nombre))
 
-        # ===== Asunto con fecha ddmmaaaa y versión basada en contador persistente =====
         fecha_ddmmaaaa, contador_actual = _leer_contador_hoy(ctx)
         if contador_actual == 0:
             asunto_correo = f"Masterfile Sutel Fijo y Movilidad {fecha_ddmmaaaa}"
@@ -326,14 +303,12 @@ try:
             asunto_correo = f"Masterfile Sutel Fijo y Movilidad {fecha_ddmmaaaa} V{contador_actual + 1}"
             siguiente_contador = contador_actual + 1
 
-        # Enviar correo con ambos archivos y viñetas
         try:
             enviar_correo_con_adjuntos(
                 asunto=asunto_correo,
                 cuerpo=cuerpo_correo + "Un saludo",
                 archivos_adjuntos=archivos_adjuntos
             )
-            # Actualizar contador SOLO si el correo se envió correctamente
             _guardar_contador_hoy(ctx, fecha_ddmmaaaa, siguiente_contador)
             st.success("📧 Correo enviado notificando la nueva versión de ambos Masterfiles.")
         except Exception as e:
