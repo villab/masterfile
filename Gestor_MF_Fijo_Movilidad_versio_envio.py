@@ -145,8 +145,8 @@ def detectar_cambios(df_original: pd.DataFrame, df_modificado: pd.DataFrame, tip
 
     def obtener_identificador(row, k):
         """Devuelve el identificador correcto según el tipo de archivo"""
-        if tipo_archivo.lower() == "fijo" and "STM" in row.index and pd.notna(row["STM"]):
-            return f"STM {row['STM']}"
+        if tipo_archivo.lower() == "fijo" and "Stm" in row.index and pd.notna(row["Stm"]):
+            return f"Stm {row['Stm']}"
         elif tipo_archivo.lower() == "movilidad" and "NOMBRE PANELISTA" in row.index and pd.notna(row["NOMBRE PANELISTA"]):
             return f"Panelista {row['NOMBRE PANELISTA']}"
         elif ID_COL in row.index:
@@ -320,5 +320,6 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
 
 
