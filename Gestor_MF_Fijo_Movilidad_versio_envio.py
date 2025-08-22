@@ -125,7 +125,7 @@ def normalize_df_for_compare(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 # ========= Comparación usando _row_id (fallback por ID SONDA) =========
-def detectar_cambios(df_original: pd.DataFrame, df_modificado: pd.DataFrame) -> list[str]:
+def detectar_cambios(df_original: pd.DataFrame, df_modificado: pd.DataFrame, tipo_archivo: str) -> list[str]:
     if df_original is None or df_modificado is None or df_original.empty or df_modificado.empty:
         return []
 
@@ -143,6 +143,17 @@ def detectar_cambios(df_original: pd.DataFrame, df_modificado: pd.DataFrame) -> 
     no = normalize_df_for_compare(df_o)
     nm = normalize_df_for_compare(df_m)
 
+    def obtener_identificador(row, k):
+        """Devuelve el identificador correcto según el tipo de archivo"""
+        if tipo_archivo.lower() == "fijo" and "STM" in row.index and pd.notna(row["STM"]):
+            return f"STM {row['STM']}"
+        elif tipo_archivo.lower() == "movilidad" and "NOMBRE PANELISTA" in row.index and pd.notna(row["NOMBRE PANELISTA"]):
+            return f"Panelista {row['NOMBRE PANELISTA']}"
+        elif ID_COL in row.index:
+            return f"ID {row[ID_COL]}"
+        else:
+            return f"Fila {k}"
+
     if use_rowkey:
         no_idx = no.set_index(ROWKEY, drop=False)
         nm_idx = nm.set_index(ROWKEY, drop=False)
@@ -156,13 +167,8 @@ def detectar_cambios(df_original: pd.DataFrame, df_modificado: pd.DataFrame) -> 
             if isinstance(rm, pd.DataFrame): rm = rm.iloc[0]
             for c in cols:
                 if ro[c] != rm[c]:
-                    # 🔹 usar STM como identificador si existe
-                    if "Stm" in ro.index:
-                        ident = ro["Stm"]
-                        cambios.append(f"STM {ident}: {c} de {ro[c]} → {rm[c]}")
-                    else:
-                        ident = ro.get(ID_COL, k)
-                        cambios.append(f"Fila {ident}: {c} de {ro[c]} → {rm[c]}")
+                    ident = obtener_identificador(ro, k)
+                    cambios.append(f"{ident}: {c} de {ro[c]} → {rm[c]}")
         return cambios
 
     else:
@@ -178,11 +184,8 @@ def detectar_cambios(df_original: pd.DataFrame, df_modificado: pd.DataFrame) -> 
             if isinstance(rm, pd.DataFrame): rm = rm.iloc[0]
             for c in cols:
                 if ro[c] != rm[c]:
-                    if "STM" in ro.index:
-                        ident = ro["STM"]
-                        cambios.append(f"STM {ident}: {c} de {ro[c]} → {rm[c]}")
-                    else:
-                        cambios.append(f"Fila {k}: {c} de {ro[c]} → {rm[c]}")
+                    ident = obtener_identificador(ro, k)
+                    cambios.append(f"{ident}: {c} de {ro[c]} → {rm[c]}")
         return cambios
 
 # ========= Carga/edición (inyecta _row_id oculto) =========
@@ -261,7 +264,8 @@ try:
             df_original = pd.read_excel(df_original_stream, dtype={0: str, 1: str})
             df_original[ROWKEY] = np.arange(len(df_original)).astype(int).astype(str)
 
-            cambios = detectar_cambios(df_original, df_modificado)
+            cambios = detectar_cambios(df_original, df_modificado, nombre_modo)
+
 
             if cambios:
                 filas_cambiadas = "\n" + "\n".join([f"• {c}" for c in cambios])
@@ -316,4 +320,5 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
 
