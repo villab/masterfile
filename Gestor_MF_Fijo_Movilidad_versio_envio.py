@@ -157,8 +157,8 @@ def detectar_cambios(df_original: pd.DataFrame, df_modificado: pd.DataFrame) -> 
             for c in cols:
                 if ro[c] != rm[c]:
                     # 🔹 usar STM como identificador si existe
-                    if "STM" in ro.index:
-                        ident = ro["STM"]
+                    if "Stm" in ro.index:
+                        ident = ro["Stm"]
                         cambios.append(f"STM {ident}: {c} de {ro[c]} → {rm[c]}")
                     else:
                         ident = ro.get(ID_COL, k)
@@ -316,3 +316,4 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
