@@ -1,4 +1,47 @@
 import streamlit as st
+import msal
+import requests
+
+# ================== CONFIG ==================
+TENANT_ID = st.secrets["azure_tenant_id"]
+CLIENT_ID = st.secrets["azure_client_id"]
+CLIENT_SECRET = st.secrets["azure_client_secret"]
+
+AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
+SCOPE = ["https://graph.microsoft.com/.default"]
+
+# ================== TOKEN ==================
+app = msal.ConfidentialClientApplication(
+    CLIENT_ID, authority=AUTHORITY, client_credential=CLIENT_SECRET
+)
+
+result = app.acquire_token_silent(SCOPE, account=None)
+if not result:
+    result = app.acquire_token_for_client(scopes=SCOPE)
+
+if "access_token" not in result:
+    st.error("❌ Error al obtener token")
+    st.stop()
+
+token = result["access_token"]
+
+# ================== LISTAR SITES ==================
+url = "https://graph.microsoft.com/v1.0/sites?search=*"
+resp = requests.get(url, headers={"Authorization": f"Bearer {token}"})
+
+if resp.status_code != 200:
+    st.error(f"Error {resp.status_code}: {resp.text}")
+else:
+    sites = resp.json().get("value", [])
+    if not sites:
+        st.warning("⚠️ No se encontraron sitios")
+    else:
+        st.write("### 📂 Sitios disponibles en el tenant")
+        for s in sites:
+            st.write(f"- **Name**: {s.get('name')} | **DisplayName**: {s.get('displayName')} | **ID**: {s.get('id')}")
+
+###################################################################################################
+import streamlit as st
 import requests
 from msal import ConfidentialClientApplication
 
