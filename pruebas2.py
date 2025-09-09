@@ -3,9 +3,9 @@ import msal
 import requests
 
 # ================== CONFIG ==================
-TENANT_ID = st.secrets["azure_tenant_id"]
-CLIENT_ID = st.secrets["azure_client_id"]
-CLIENT_SECRET = st.secrets["azure_client_secret"]
+TENANT_ID = st.secrets["tenant_id"]
+CLIENT_ID = st.secrets["client_id"]
+CLIENT_SECRET = st.secrets["client_secret"]
 
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 SCOPE = ["https://graph.microsoft.com/.default"]
