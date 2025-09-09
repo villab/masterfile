@@ -3,9 +3,9 @@ import requests
 from msal import ConfidentialClientApplication
 
 # ========= CONFIG (ajusta con tus datos) =========
-TENANT_ID = st.secrets["azure"]["tenant_id"]
-CLIENT_ID = st.secrets["azure"]["client_id"]
-CLIENT_SECRET = st.secrets["azure"]["client_secret"]
+TENANT_ID = st.secrets["tenant_id"]
+CLIENT_ID = st.secrets["client_id"]
+CLIENT_SECRET = st.secrets["client_secret"]
 
 # URL Graph
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
