@@ -2,9 +2,10 @@ import msal
 import requests
 from io import BytesIO
 import pandas as pd
+import streamlit as st
 
 # ============ CONFIG ============ #
-CLIENT_ID = "04f0c124-f2bc-4f59-9a21-0803cd61d7e8"  # App pública de Microsoft (Office Desktop)
+CLIENT_ID = "04f0c124-f2bc-4f59-9a21-0803cd61d7e8"  # App pública de Microsoft
 AUTHORITY = "https://login.microsoftonline.com/common"
 SCOPES = ["Files.ReadWrite.All"]
 
@@ -16,29 +17,33 @@ app = msal.PublicClientApplication(CLIENT_ID, authority=AUTHORITY)
 
 # Intenta reusar sesión
 accounts = app.get_accounts()
+result = None
 if accounts:
     result = app.acquire_token_silent(SCOPES, account=accounts[0])
-else:
-    result = None
 
-# Si no hay sesión guardada, abre navegador
 if not result:
-    result = app.acquire_token_interactive(scopes=SCOPES)
+    flow = app.initiate_device_flow(scopes=SCOPES)
+    if "user_code" not in flow:
+        st.error("❌ Error al iniciar flujo de autenticación.")
+    else:
+        st.write("🔑 Ve a [https://microsoft.com/devicelogin](https://microsoft.com/devicelogin) e ingresa este código:")
+        st.code(flow["user_code"])
+        result = app.acquire_token_by_device_flow(flow)
 
 if "access_token" not in result:
-    raise Exception("❌ Error al obtener token:", result.get("error_description"))
+    st.error(f"❌ Error al obtener token: {result.get('error_description')}")
+else:
+    token = result["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
 
-token = result["access_token"]
-headers = {"Authorization": f"Bearer {token}"}
+    # ============ DESCARGAR ARCHIVO ============ #
+    url = f"{SITE_URL}/_api/v2.0/drives/me/root:{SITE_PATH}:/content"
+    resp = requests.get(url, headers=headers)
 
-# ============ DESCARGAR ARCHIVO ============ #
-url = f"{SITE_URL}/_api/v2.0/drives/me/root:{SITE_PATH}:/content"
-resp = requests.get(url, headers=headers)
-resp.raise_for_status()
-
-# Leer Excel en memoria
-excel_bytes = BytesIO(resp.content)
-df = pd.read_excel(excel_bytes)
-
-print("✅ Archivo descargado con éxito")
-print(df.head())
+    if resp.status_code == 200:
+        excel_bytes = BytesIO(resp.content)
+        df = pd.read_excel(excel_bytes)
+        st.success("✅ Archivo descargado con éxito")
+        st.dataframe(df.head())
+    else:
+        st.error(f"❌ Error al descargar archivo: {resp.status_code} {resp.text}")
