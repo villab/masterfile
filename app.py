@@ -1,52 +1,33 @@
+import streamlit as st
 import msal
 import requests
-from io import BytesIO
-import pandas as pd
-import streamlit as st
 
-# ============ CONFIG ============ #
-CLIENT_ID = "04f0c124-f2bc-4f59-9a21-0803cd61d7e8"  # App pública de Microsoft
-AUTHORITY = "https://login.microsoftonline.com/common"
-SCOPES = ["Files.ReadWrite.All"]
+# Leer de secrets
+CLIENT_ID = st.secrets["client_id"]
+TENANT_ID = st.secrets["tenant_id"]
+CLIENT_SECRET = st.secrets["client_secret"]
 
-SITE_URL = "https://caseonit.sharepoint.com/sites/Sutel"
-SITE_PATH = "/Documentos compartidos/01. Documentos MedUX/Automatizacion/Masterfile/MasterfileSutel.xlsx"
+AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
+SCOPE = ["https://graph.microsoft.com/.default"]
 
-# ============ AUTENTICACIÓN ============ #
-app = msal.PublicClientApplication(CLIENT_ID, authority=AUTHORITY)
+# Autenticación MSAL
+app = msal.ConfidentialClientApplication(
+    CLIENT_ID,
+    authority=AUTHORITY,
+    client_credential=CLIENT_SECRET
+)
 
-# Intenta reusar sesión
-accounts = app.get_accounts()
-result = None
-if accounts:
-    result = app.acquire_token_silent(SCOPES, account=accounts[0])
+result = app.acquire_token_for_client(scopes=SCOPE)
 
-if not result:
-    flow = app.initiate_device_flow(scopes=SCOPES)
-    if "user_code" not in flow:
-        st.error("❌ Error al iniciar flujo de autenticación (device flow).")
-        st.stop()
-    else:
-        st.write("🔑 Ve a [https://microsoft.com/devicelogin](https://microsoft.com/devicelogin) e ingresa este código:")
-        st.code(flow["user_code"])
-        result = app.acquire_token_by_device_flow(flow)
+if "access_token" in result:
+    st.success("✅ Autenticación exitosa con Graph API")
+    token = result["access_token"]
 
-# Validar si realmente obtuvimos un token
-if not result or "access_token" not in result:
-    st.error(f"❌ No se pudo autenticar. Detalle: {result}")
-    st.stop()
+    headers = {"Authorization": f"Bearer {token}"}
+    url = "https://graph.microsoft.com/v1.0/sites?search=caseonit.sharepoint.com"
+    resp = requests.get(url, headers=headers)
 
-# ============ SI TENEMOS TOKEN, PROBAR DESCARGA ============ #
-token = result["access_token"]
-headers = {"Authorization": f"Bearer {token}"}
-
-url = f"{SITE_URL}/_api/v2.0/drives/me/root:{SITE_PATH}:/content"
-resp = requests.get(url, headers=headers)
-
-if resp.status_code == 200:
-    excel_bytes = BytesIO(resp.content)
-    df = pd.read_excel(excel_bytes)
-    st.success("✅ Archivo descargado con éxito")
-    st.dataframe(df.head())
+    st.write("Respuesta Graph:", resp.status_code)
+    st.json(resp.json())
 else:
-    st.error(f"❌ Error al descargar archivo: {resp.status_code} {resp.text}")
+    st.error(f"❌ Error al autenticar: {result.get('error')} {result.get('error_description')}")
