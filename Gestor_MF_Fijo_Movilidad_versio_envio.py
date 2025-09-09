@@ -1,28 +1,35 @@
-# VERSION CON SUBCARPETAS DE BACKUP SEPARADAS PARA FIJO Y MOVILIDAD
-# y envío de correo con ambas últimas versiones con fecha y viñetas de cambios por archivo
+# VERSION FINAL - MASTERFILE con MSAL y Microsoft Graph API
+# ==============================================
+# - Backups separados para FIJO y MOVILIDAD
+# - Envío de correo con contador persistente por día
+# - Detección de cambios valor viejo → valor nuevo
+# ==============================================
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 from io import BytesIO
 from datetime import datetime
-from office365.sharepoint.client_context import ClientContext
-from office365.runtime.auth.user_credential import UserCredential
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, JsCode
 from zoneinfo import ZoneInfo
 import smtplib
 from email.message import EmailMessage
+import requests
+import msal
 
-# ------ Configuración de vista de la pagina ----------
+# ------ Configuración de vista ----------
 st.set_page_config(layout="wide")
 st.title("📋 Masterfile Entorno de medición Fijo y Movilidad")
 
 # ================== CONFIGURACIÓN ==================
-USERNAME = st.secrets["sharepoint_user"]
-APP_PASSWORD = st.secrets["app_password"]
+TENANT_ID = st.secrets["tenant_id"]
+CLIENT_ID = st.secrets["client_id"]
+CLIENT_SECRET = st.secrets["client_secret"]
 
-SITE_URL = "https://caseonit.sharepoint.com/sites/Sutel"
-FOLDER_URL = "/sites/Sutel/Documentos compartidos/01. Documentos MedUX/Automatizacion/Masterfile"
+SITE_HOST = "caseonit.sharepoint.com"
+SITE_NAME = "Sutel"
+LIBRARY = "Documentos compartidos"
+FOLDER_PATH = "01. Documentos MedUX/Automatizacion/Masterfile"
 
 ARCHIVOS = {
     "Fijo": "MasterfileSutel.xlsx",
@@ -38,12 +45,68 @@ EMAIL_FROM = st.secrets["email_from"]
 EMAIL_TO = st.secrets["email_to"]
 
 # ================== Parámetros ==================
-ID_COL = "ID SONDA"     # identificador “lógico” si hiciera falta
-ROWKEY = "_row_id"      # identificador “físico” estable por fila para comparar
+ID_COL = "ID SONDA"
+ROWKEY = "_row_id"
+
+# ========= Autenticación con MSAL =========
+def get_access_token():
+    app = msal.ConfidentialClientApplication(
+        CLIENT_ID, authority=f"https://login.microsoftonline.com/{TENANT_ID}",
+        client_credential=CLIENT_SECRET
+    )
+    result = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
+    if "access_token" not in result:
+        raise Exception("❌ No se pudo obtener token de acceso")
+    return result["access_token"]
+
+# ========= Funciones SharePoint con Graph =========
+def _get_site_and_drive(token):
+    headers = {"Authorization": f"Bearer {token}"}
+    site_url = f"https://graph.microsoft.com/v1.0/sites/{SITE_HOST}:/sites/{SITE_NAME}"
+    site = requests.get(site_url, headers=headers).json()
+    site_id = site["id"]
+
+    drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
+    drives = requests.get(drive_url, headers=headers).json()
+    drive_id = next(d["id"] for d in drives["value"] if d["name"] == LIBRARY)
+    return site_id, drive_id
+
+def get_file_from_sharepoint(path):
+    token = get_access_token()
+    site_id, drive_id = _get_site_and_drive(token)
+    headers = {"Authorization": f"Bearer {token}"}
+    url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/{path}:/content"
+    resp = requests.get(url, headers=headers)
+    if resp.status_code != 200:
+        raise Exception(f"Error descargando archivo {path}: {resp.text}")
+    return BytesIO(resp.content)
+
+def upload_file_to_sharepoint(path, file_bytes):
+    token = get_access_token()
+    site_id, drive_id = _get_site_and_drive(token)
+    headers = {"Authorization": f"Bearer {token}"}
+    url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/{path}:/content"
+    resp = requests.put(url, headers=headers, data=file_bytes.getvalue())
+    if resp.status_code not in (200, 201):
+        raise Exception(f"Error subiendo archivo {path}: {resp.text}")
+
+def ensure_folder(path):
+    token = get_access_token()
+    site_id, drive_id = _get_site_and_drive(token)
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/{path}"
+    resp = requests.get(url, headers=headers)
+    if resp.status_code == 404:
+        parent = "/".join(path.split("/")[:-1])
+        folder_name = path.split("/")[-1]
+        create_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/{parent}:/children"
+        body = {"name": folder_name, "folder": {}, "@microsoft.graph.conflictBehavior": "fail"}
+        resp = requests.post(create_url, headers=headers, json=body)
+        if resp.status_code not in (200, 201):
+            raise Exception(f"Error creando carpeta {path}: {resp.text}")
 
 # ========= Envío de correo =========
 def enviar_correo_con_adjuntos(asunto, cuerpo, archivos_adjuntos):
-    """Envia un correo con múltiples adjuntos (archivo_bytes, nombre_archivo)"""
     msg = EmailMessage()
     msg["Subject"] = asunto
     msg["From"] = EMAIL_FROM
@@ -63,40 +126,31 @@ def enviar_correo_con_adjuntos(asunto, cuerpo, archivos_adjuntos):
         smtp.login(SMTP_USER, SMTP_PASS)
         smtp.send_message(msg)
 
-# ========= Contador persistente en SharePoint =========
-def _leer_contador_hoy(ctx):
+# ========= Contador persistente =========
+def _leer_contador_hoy():
     fecha_hoy = datetime.now(ZoneInfo("America/Costa_Rica")).strftime("%d%m%Y")
-    contador_url = f"{FOLDER_URL}/contador_envios.txt"
     contador_actual = 0
     try:
-        stream = BytesIO()
-        ctx.web.get_file_by_server_relative_url(contador_url).download(stream).execute_query()
-        stream.seek(0)
+        stream = get_file_from_sharepoint(f"{FOLDER_PATH}/contador_envios.txt")
         contenido = stream.read().decode("utf-8").strip()
         partes = contenido.split(",")
         if len(partes) == 2:
             fecha_guardada, cnt = partes
             if fecha_guardada == fecha_hoy:
                 contador_actual = int(cnt)
-            else:
-                contador_actual = 0
-        else:
-            contador_actual = 0
     except Exception:
         contador_actual = 0
     return fecha_hoy, contador_actual
 
-def _guardar_contador_hoy(ctx, fecha_ddmmaaaa, nuevo_contador):
+def _guardar_contador_hoy(fecha_ddmmaaaa, nuevo_contador):
     contenido = f"{fecha_ddmmaaaa},{nuevo_contador}".encode("utf-8")
     out = BytesIO(contenido)
-    out.seek(0)
-    folder = ctx.web.get_folder_by_server_relative_url(FOLDER_URL)
-    folder.upload_file("contador_envios.txt", out).execute_query()
+    upload_file_to_sharepoint(f"{FOLDER_PATH}/contador_envios.txt", out)
 
-# ========= Limpieza/normalización para comparar =========
+# ========= Normalización para comparar =========
 PHANTOM_PATTERNS = [r"^Unnamed", r"::auto_unique_id::", r"^index$", r"^Index$"]
 
-def drop_phantom_cols(df: pd.DataFrame) -> pd.DataFrame:
+def drop_phantom_cols(df):
     if df is None or df.empty:
         return df
     mask = np.zeros(len(df.columns), dtype=bool)
@@ -104,7 +158,7 @@ def drop_phantom_cols(df: pd.DataFrame) -> pd.DataFrame:
         mask |= df.columns.astype(str).str.contains(pat, regex=True, na=False)
     return df.loc[:, ~mask]
 
-def normalize_df_for_compare(df: pd.DataFrame) -> pd.DataFrame:
+def normalize_df_for_compare(df):
     if df is None or df.empty:
         return df
     out = df.copy()
@@ -124,9 +178,9 @@ def normalize_df_for_compare(df: pd.DataFrame) -> pd.DataFrame:
         out[c] = out[c].map(to_cmp)
     return out
 
-# ========= Comparación usando _row_id (fallback por ID SONDA) =========
-def detectar_cambios(df_original: pd.DataFrame, df_modificado: pd.DataFrame, tipo_archivo: str) -> list[str]:
-    if df_original is None or df_modificado is None or df_original.empty or df_modificado.empty:
+# ========= Comparación =========
+def detectar_cambios(df_original, df_modificado, tipo_archivo):
+    if df_original.empty or df_modificado.empty:
         return []
 
     df_o = drop_phantom_cols(df_original).copy()
@@ -134,7 +188,6 @@ def detectar_cambios(df_original: pd.DataFrame, df_modificado: pd.DataFrame, tip
 
     have_rowkey_o = ROWKEY in df_o.columns
     have_rowkey_m = ROWKEY in df_m.columns
-
     use_rowkey = have_rowkey_o and have_rowkey_m
 
     if not use_rowkey and ID_COL not in df_o.columns:
@@ -144,7 +197,6 @@ def detectar_cambios(df_original: pd.DataFrame, df_modificado: pd.DataFrame, tip
     nm = normalize_df_for_compare(df_m)
 
     def obtener_identificador(row, k):
-        """Devuelve el identificador correcto según el tipo de archivo"""
         if tipo_archivo.lower() == "fijo" and "Stm" in row.index and pd.notna(row["Stm"]):
             return f"Stm {row['Stm']}"
         elif tipo_archivo.lower() == "movilidad" and "NOMBRE PANELISTA" in row.index and pd.notna(row["NOMBRE PANELISTA"]):
@@ -154,12 +206,12 @@ def detectar_cambios(df_original: pd.DataFrame, df_modificado: pd.DataFrame, tip
         else:
             return f"Fila {k}"
 
+    cambios = []
     if use_rowkey:
         no_idx = no.set_index(ROWKEY, drop=False)
         nm_idx = nm.set_index(ROWKEY, drop=False)
         comunes = sorted(set(no_idx.index) & set(nm_idx.index))
         cols = [c for c in no.columns if c in nm.columns and c != ROWKEY]
-        cambios = []
         for k in comunes:
             ro = no_idx.loc[k]
             rm = nm_idx.loc[k]
@@ -169,14 +221,11 @@ def detectar_cambios(df_original: pd.DataFrame, df_modificado: pd.DataFrame, tip
                 if ro[c] != rm[c]:
                     ident = obtener_identificador(ro, k)
                     cambios.append(f"{ident}: {c} de {ro[c]} → {rm[c]}")
-        return cambios
-
     else:
         no_idx = no.drop_duplicates(subset=[ID_COL]).set_index(ID_COL, drop=False)
         nm_idx = nm.drop_duplicates(subset=[ID_COL]).set_index(ID_COL, drop=False)
         comunes = sorted(set(no_idx.index) & set(nm_idx.index))
         cols = [c for c in no.columns if c in nm.columns and c != ID_COL]
-        cambios = []
         for k in comunes:
             ro = no_idx.loc[k]
             rm = nm_idx.loc[k]
@@ -186,20 +235,13 @@ def detectar_cambios(df_original: pd.DataFrame, df_modificado: pd.DataFrame, tip
                 if ro[c] != rm[c]:
                     ident = obtener_identificador(ro, k)
                     cambios.append(f"{ident}: {c} de {ro[c]} → {rm[c]}")
-        return cambios
+    return cambios
 
-# ========= Carga/edición (inyecta _row_id oculto) =========
+# ========= Manejo de archivos =========
 def manejar_archivo(nombre_modo, nombre_archivo):
-    ctx = ClientContext(SITE_URL).with_credentials(UserCredential(USERNAME, APP_PASSWORD))
-    FILE_URL = f"{FOLDER_URL}/{nombre_archivo}"
-
-    file = ctx.web.get_file_by_server_relative_url(FILE_URL)
-    file_stream = BytesIO()
-    file.download(file_stream).execute_query()
-    file_stream.seek(0)
-
+    file_stream = get_file_from_sharepoint(f"{FOLDER_PATH}/{nombre_archivo}")
     df_original = pd.read_excel(file_stream, dtype={0: str, 1: str})
-    df_original[ROWKEY] = np.arange(len(df_original)).astype(int).astype(str)
+    df_original[ROWKEY] = np.arange(len(df_original)).astype(str)
 
     st.success(f"📂 Cargado {nombre_archivo} ✅")
 
@@ -234,10 +276,9 @@ def manejar_archivo(nombre_modo, nombre_archivo):
     )
 
     df_modificado = pd.DataFrame(grid_response["data"])
-
     return df_modificado
 
-# ================== INTERFAZ CON PESTAÑAS ==================
+# ================== INTERFAZ PRINCIPAL ==================
 try:
     tab_fijo, tab_movilidad = st.tabs(["📄 Masterfile Fijo", "📄 Masterfile Movilidad"])
 
@@ -252,21 +293,15 @@ try:
         archivos_adjuntos = []
         cuerpo_correo = f"Buen día,\n\nSe adjunta nueva versión de Masterfile con los cambios realizados el {timestamp}.\n\n"
 
-        ctx = ClientContext(SITE_URL).with_credentials(UserCredential(USERNAME, APP_PASSWORD))
-
         for nombre_modo, df_modificado, nombre_archivo in [
             ("Fijo", df_fijo, ARCHIVOS["Fijo"]),
             ("Movilidad", df_movilidad, ARCHIVOS["Movilidad"])
         ]:
-            df_original_stream = BytesIO()
-            ctx.web.get_file_by_server_relative_url(f"{FOLDER_URL}/{nombre_archivo}").download(df_original_stream).execute_query()
-            df_original_stream.seek(0)
+            df_original_stream = get_file_from_sharepoint(f"{FOLDER_PATH}/{nombre_archivo}")
             df_original = pd.read_excel(df_original_stream, dtype={0: str, 1: str})
-            df_original[ROWKEY] = np.arange(len(df_original)).astype(int).astype(str)
+            df_original[ROWKEY] = np.arange(len(df_original)).astype(str)
 
             cambios = detectar_cambios(df_original, df_modificado, nombre_modo)
-
-
             if cambios:
                 filas_cambiadas = "\n" + "\n".join([f"• {c}" for c in cambios])
             else:
@@ -283,23 +318,17 @@ try:
             df_a_guardar.to_excel(bytes_excel, index=False)
             bytes_excel.seek(0)
 
-            backup_folder_url = f"{FOLDER_URL}/Backups/{nombre_modo}"
-            try:
-                ctx.web.get_folder_by_server_relative_url(backup_folder_url).expand(["Files"]).get().execute_query()
-            except:
-                ctx.web.folders.add(backup_folder_url).execute_query()
-
-            backup_folder = ctx.web.get_folder_by_server_relative_url(backup_folder_url)
-            backup_folder.upload_file(nuevo_nombre, bytes_excel).execute_query()
+            backup_folder = f"{FOLDER_PATH}/Backups/{nombre_modo}"
+            ensure_folder(backup_folder)
+            upload_file_to_sharepoint(f"{backup_folder}/{nuevo_nombre}", bytes_excel)
 
             bytes_excel.seek(0)
-            main_folder = ctx.web.get_folder_by_server_relative_url(FOLDER_URL)
-            main_folder.upload_file(nombre_archivo, bytes_excel).execute_query()
+            upload_file_to_sharepoint(f"{FOLDER_PATH}/{nombre_archivo}", bytes_excel)
 
             bytes_excel.seek(0)
             archivos_adjuntos.append((BytesIO(bytes_excel.getvalue()), nuevo_nombre))
 
-        fecha_ddmmaaaa, contador_actual = _leer_contador_hoy(ctx)
+        fecha_ddmmaaaa, contador_actual = _leer_contador_hoy()
         if contador_actual == 0:
             asunto_correo = f"Masterfile Sutel Fijo y Movilidad {fecha_ddmmaaaa}"
             siguiente_contador = 1
@@ -313,13 +342,10 @@ try:
                 cuerpo=cuerpo_correo + "Un saludo",
                 archivos_adjuntos=archivos_adjuntos
             )
-            _guardar_contador_hoy(ctx, fecha_ddmmaaaa, siguiente_contador)
+            _guardar_contador_hoy(fecha_ddmmaaaa, siguiente_contador)
             st.success("📧 Correo enviado notificando la nueva versión de ambos Masterfiles.")
         except Exception as e:
             st.error(f"Error al enviar correo: {e}")
 
 except Exception as e:
     st.error(f"Error: {e}")
-
-
-
