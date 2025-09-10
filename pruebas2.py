@@ -3,9 +3,9 @@ import requests
 import jwt
 
 # ⚙️ Configuración
-TENANT_ID = "tu-tenant-id"
-CLIENT_ID = "tu-client-id"
-CLIENT_SECRET = "tu-client-secret"
+TENANT_ID = "tenant_id"
+CLIENT_ID = "client_id"
+CLIENT_SECRET = "client_secret"
 
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 SCOPES = ["https://graph.microsoft.com/.default"]
