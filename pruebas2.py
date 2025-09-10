@@ -1,44 +1,35 @@
-import streamlit as st
 import msal
 import requests
+import jwt
 
-# ================== CONFIG ==================
-TENANT_ID = st.secrets["tenant_id"]
-CLIENT_ID = st.secrets["client_id"]
-CLIENT_SECRET = st.secrets["client_secret"]
+# ⚙️ Configuración
+TENANT_ID = "tu-tenant-id"
+CLIENT_ID = "tu-client-id"
+CLIENT_SECRET = "tu-client-secret"
 
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
-SCOPE = ["https://graph.microsoft.com/.default"]
+SCOPES = ["https://graph.microsoft.com/.default"]
 
-# ================== TOKEN ==================
+# 🔑 Crear app confidencial
 app = msal.ConfidentialClientApplication(
-    CLIENT_ID, authority=AUTHORITY, client_credential=CLIENT_SECRET
+    CLIENT_ID,
+    authority=AUTHORITY,
+    client_credential=CLIENT_SECRET
 )
 
-result = app.acquire_token_silent(SCOPE, account=None)
-if not result:
-    result = app.acquire_token_for_client(scopes=SCOPE)
+# 📥 Obtener token
+result = app.acquire_token_for_client(scopes=SCOPES)
 
-if "access_token" not in result:
-    st.error("❌ Error al obtener token")
-    st.stop()
+if "access_token" in result:
+    print("✅ Token obtenido")
+    token = result["access_token"]
 
-token = result["access_token"]
-
-# ================== LISTAR SITES ==================
-url = "https://graph.microsoft.com/v1.0/sites?search=*"
-resp = requests.get(url, headers={"Authorization": f"Bearer {token}"})
-
-if resp.status_code != 200:
-    st.error(f"Error {resp.status_code}: {resp.text}")
+    # Decodificar cabecera del token para verificar roles
+    decoded = jwt.decode(token, options={"verify_signature": False})
+    print("Roles en el token:", decoded.get("roles", []))
 else:
-    sites = resp.json().get("value", [])
-    if not sites:
-        st.warning("⚠️ No se encontraron sitios")
-    else:
-        st.write("### 📂 Sitios disponibles en el tenant")
-        for s in sites:
-            st.write(f"- **Name**: {s.get('name')} | **DisplayName**: {s.get('displayName')} | **ID**: {s.get('id')}")
+    print("❌ Error al obtener token:", result.get("error_description"))
+
 
 ###################################################################################################
 import streamlit as st
