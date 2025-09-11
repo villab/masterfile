@@ -13,9 +13,8 @@ CLIENT_SECRET = st.secrets["client_secret"]
 # ==========================
 # 📌 Configuración SharePoint
 # ==========================
-SITE_HOST = "caseonit.sharepoint.com"
-SITE_NAME = "Sutel"       # 👈 pon aquí el nombre exacto del site
-LIBRARY = "Documentos"    # 👈 normalmente "Documentos" en español
+SITE_NAME = "Sutel"       # 👈 nombre del site en SharePoint
+LIBRARY = "Documentos"    # 👈 normalmente "Documentos" o "Shared Documents"
 
 # ==========================
 # 🎟️ Obtener token
@@ -40,22 +39,29 @@ headers = {"Authorization": f"Bearer {token}"}
 print("✅ Token obtenido correctamente\n")
 
 # ==========================
-# 🔍 Diagnóstico: Site
+# 🔍 Buscar el site por nombre
 # ==========================
-site_url = f"https://graph.microsoft.com/v1.0/sites/{SITE_HOST}:/sites/{SITE_NAME}"
-print(f"📌 Llamando a: {site_url}")
-resp = requests.get(site_url, headers=headers)
+sites_url = f"https://graph.microsoft.com/v1.0/sites?search={SITE_NAME}"
+print(f"📌 Llamando a: {sites_url}")
+resp = requests.get(sites_url, headers=headers)
 print("STATUS:", resp.status_code)
 print("RESPUESTA:", json.dumps(resp.json(), indent=2), "\n")
 
-if resp.status_code != 200:
-    raise SystemExit("⛔ No se pudo acceder al site, revisa permisos en Azure o el nombre del site.")
+if resp.status_code != 200 or "value" not in resp.json():
+    raise SystemExit("⛔ No se pudo buscar sites. Revisa permisos en Azure.")
 
-site_id = resp.json().get("id")
-print(f"✅ Site ID detectado: {site_id}\n")
+sites = resp.json()["value"]
+
+if not sites:
+    raise SystemExit(f"⛔ No se encontró ningún site con nombre '{SITE_NAME}'")
+
+# Tomamos el primero que coincida
+site = sites[0]
+site_id = site["id"]
+print(f"✅ Site encontrado: {site['name']} → {site_id}\n")
 
 # ==========================
-# 🔍 Diagnóstico: Drives
+# 🔍 Listar drives del site
 # ==========================
 drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
 print(f"📌 Llamando a: {drive_url}")
@@ -66,7 +72,6 @@ print("RESPUESTA:", json.dumps(drives_resp.json(), indent=2), "\n")
 if drives_resp.status_code != 200:
     raise SystemExit("⛔ No se pudo acceder a los drives.")
 
-# Buscar la biblioteca configurada
 drives = drives_resp.json().get("value", [])
 drive_id = next((d["id"] for d in drives if d["name"] == LIBRARY), None)
 
