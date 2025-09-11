@@ -26,9 +26,10 @@ TENANT_ID = st.secrets["tenant_id"]
 CLIENT_ID = st.secrets["client_id"]
 CLIENT_SECRET = st.secrets["client_secret"]
 
+# Ajusta si tu "library" real tiene otro nombre; la búsqueda es tolerante.
 SITE_HOST = "caseonit.sharepoint.com"
 SITE_NAME = "Sutel"
-LIBRARY = "Documentos compartidos"
+LIBRARY = "Documentos"  # se usa búsqueda parcial; "Documentos" / "Documentos compartidos" / "Shared Documents"
 FOLDER_PATH = "01. Documentos MedUX/Automatizacion/Masterfile"
 
 ARCHIVOS = {
@@ -51,59 +52,149 @@ ROWKEY = "_row_id"
 # ========= Autenticación con MSAL =========
 def get_access_token():
     app = msal.ConfidentialClientApplication(
-        CLIENT_ID, authority=f"https://login.microsoftonline.com/{TENANT_ID}",
+        CLIENT_ID,
+        authority=f"https://login.microsoftonline.com/{TENANT_ID}",
         client_credential=CLIENT_SECRET
     )
     result = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
     if "access_token" not in result:
-        raise Exception("❌ No se pudo obtener token de acceso")
+        # Mostrar detalle en UI para depuración
+        st.error(f"❌ No se pudo obtener token de acceso: {result}")
+        raise Exception("No se pudo obtener token de acceso")
     return result["access_token"]
 
-# ========= Funciones SharePoint con Graph =========
+# ========= Funciones SharePoint con Graph (más robustas) =========
 def _get_site_and_drive(token):
+    """
+    Devuelve (site_id, drive_id).
+    - Busca sites con ?search=SITE_NAME y elige el que contenga SITE_HOST y SITE_NAME si es posible.
+    - Busca drive por coincidencia parcial del nombre LIBRARY (case-insensitive).
+    """
     headers = {"Authorization": f"Bearer {token}"}
-    site_url = f"https://graph.microsoft.com/v1.0/sites/{SITE_HOST}:/sites/{SITE_NAME}"
-    site = requests.get(site_url, headers=headers).json()
-    site_id = site["id"]
 
-    drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
-    drives = requests.get(drive_url, headers=headers).json()
-    drive_id = next(d["id"] for d in drives["value"] if d["name"] == LIBRARY)
+    # 1) Buscar sites que coincidan con SITE_NAME
+    search_url = f"https://graph.microsoft.com/v1.0/sites?search={SITE_NAME}"
+    resp = requests.get(search_url, headers=headers)
+    if resp.status_code != 200:
+        raise Exception(f"Error buscando sites: {resp.status_code} {resp.text}")
+
+    sites = resp.json().get("value", [])
+    if not sites:
+        raise Exception(f"No se encontraron sites con search='{SITE_NAME}' (respuesta vacía)")
+
+    # Intentar elegir el site correcto: preferir site cuyo webUrl contenga SITE_HOST y SITE_NAME
+    site = None
+    for s in sites:
+        weburl = s.get("webUrl", "")
+        if SITE_HOST in weburl and SITE_NAME in weburl:
+            site = s
+            break
+    if site is None:
+        # fallback: tomar el primero cuyo name contenga SITE_NAME (case-insensitive)
+        for s in sites:
+            if SITE_NAME.lower() in s.get("name", "").lower():
+                site = s
+                break
+    if site is None:
+        # si aún no hay coincidencia, tomar el primer site devuelto
+        site = sites[0]
+
+    site_id = site.get("id")
+    if not site_id:
+        raise Exception(f"Site encontrado no tiene 'id': {site}")
+
+    # 2) Obtener drives (bibliotecas) del site
+    drives_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
+    drives_resp = requests.get(drives_url, headers=headers)
+    if drives_resp.status_code != 200:
+        raise Exception(f"Error listando drives: {drives_resp.status_code} {drives_resp.text}")
+
+    drives = drives_resp.json().get("value", [])
+    if not drives:
+        raise Exception("No se encontraron drives en el site.")
+
+    # Buscar drive por coincidencia parcial en el nombre (case-insensitive)
+    drive = None
+    for d in drives:
+        if LIBRARY.lower() in (d.get("name") or "").lower():
+            drive = d
+            break
+    if drive is None:
+        # intentar nombres comunes
+        for d in drives:
+            if "documents" in (d.get("name") or "").lower() or "documentos" in (d.get("name") or "").lower():
+                drive = d
+                break
+    if drive is None:
+        # fallback al primer drive
+        drive = drives[0]
+
+    drive_id = drive.get("id")
+    if not drive_id:
+        raise Exception(f"Drive encontrado no tiene 'id': {drive}")
+
+    # devolver ids
     return site_id, drive_id
 
 def get_file_from_sharepoint(path):
+    """
+    path: ruta relativa dentro del drive, por ejemplo:
+      "01. Documentos MedUX/Automatizacion/Masterfile/MasterfileSutel.xlsx"
+    devuelve BytesIO con el contenido.
+    """
     token = get_access_token()
     site_id, drive_id = _get_site_and_drive(token)
     headers = {"Authorization": f"Bearer {token}"}
     url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/{path}:/content"
     resp = requests.get(url, headers=headers)
     if resp.status_code != 200:
-        raise Exception(f"Error descargando archivo {path}: {resp.text}")
+        raise Exception(f"Error descargando archivo {path}: {resp.status_code} {resp.text}")
     return BytesIO(resp.content)
 
 def upload_file_to_sharepoint(path, file_bytes):
+    """
+    path: ruta completa dentro del drive (incluyendo el nombre del archivo).
+    file_bytes: BytesIO
+    """
     token = get_access_token()
     site_id, drive_id = _get_site_and_drive(token)
     headers = {"Authorization": f"Bearer {token}"}
     url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/{path}:/content"
+    # usar PUT para sobrescribir
     resp = requests.put(url, headers=headers, data=file_bytes.getvalue())
     if resp.status_code not in (200, 201):
-        raise Exception(f"Error subiendo archivo {path}: {resp.text}")
+        raise Exception(f"Error subiendo archivo {path}: {resp.status_code} {resp.text}")
 
 def ensure_folder(path):
+    """
+    Asegura que exista la carpeta `path` bajo root. path relativo p.ej "Backups/Fijo".
+    Crea la carpeta si no existe (intenta crear solo la última carpeta).
+    """
     token = get_access_token()
     site_id, drive_id = _get_site_and_drive(token)
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+    # comprobar si carpeta existe
     url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/{path}"
     resp = requests.get(url, headers=headers)
-    if resp.status_code == 404:
-        parent = "/".join(path.split("/")[:-1])
-        folder_name = path.split("/")[-1]
+    if resp.status_code == 200:
+        return  # ya existe
+
+    # si no existe, crearla en el padre
+    parent = "/".join(path.split("/")[:-1])
+    folder_name = path.split("/")[-1]
+    if parent == "":
+        create_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root/children"
+    else:
         create_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/{parent}:/children"
-        body = {"name": folder_name, "folder": {}, "@microsoft.graph.conflictBehavior": "fail"}
-        resp = requests.post(create_url, headers=headers, json=body)
-        if resp.status_code not in (200, 201):
-            raise Exception(f"Error creando carpeta {path}: {resp.text}")
+
+    body = {"name": folder_name, "folder": {}, "@microsoft.graph.conflictBehavior": "fail"}
+    create_resp = requests.post(create_url, headers=headers, json=body)
+    if create_resp.status_code not in (200, 201):
+        # si ya existe (conflict) podemos ignorar, sino lanzar error
+        if create_resp.status_code == 409:
+            return
+        raise Exception(f"Error creando carpeta {path}: {create_resp.status_code} {create_resp.text}")
 
 # ========= Envío de correo =========
 def enviar_correo_con_adjuntos(asunto, cuerpo, archivos_adjuntos):
@@ -333,7 +424,7 @@ try:
             asunto_correo = f"Masterfile Sutel Fijo y Movilidad {fecha_ddmmaaaa}"
             siguiente_contador = 1
         else:
-            asunto_correo = f"Masterfile Sutel Fijo y Movilidad {fecha_ddmmaaaa} V{contador_actual + 1}"
+            asunto_correo = f"Masterfile Sutel y Movilidad {fecha_ddmmaaaa} V{contador_actual + 1}"
             siguiente_contador = contador_actual + 1
 
         try:
