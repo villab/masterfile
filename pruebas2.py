@@ -86,3 +86,26 @@ else:
     st.warning(f"❌ No se encontró la biblioteca '{LIBRARY}'. Disponibles:")
     for d in drives:
         st.write("-", d["name"])
+
+
+
+# ==========================
+# 📂 Listar archivos de la biblioteca Documentos
+# ==========================
+items_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root/children"
+print(f"📌 Llamando a: {items_url}")
+items_resp = requests.get(items_url, headers=headers)
+print("STATUS:", items_resp.status_code)
+print("RESPUESTA:", json.dumps(items_resp.json(), indent=2), "\n")
+
+if items_resp.status_code == 200:
+    items = items_resp.json().get("value", [])
+    if not items:
+        print("⚠️ La biblioteca está vacía.")
+    else:
+        print("✅ Archivos y carpetas encontrados:")
+        for item in items:
+            tipo = "📁 Carpeta" if "folder" in item else "📄 Archivo"
+            print(f"{tipo}: {item['name']} → {item['id']}")
+else:
+    raise SystemExit("⛔ No se pudo acceder a los items de la biblioteca.")
