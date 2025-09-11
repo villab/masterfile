@@ -1,76 +1,76 @@
 import requests
-import streamlit as st
 import msal
+import streamlit as st
 
-# 🔑 Configuración desde secrets de Streamlit
+# ==========================
+# 🔑 Credenciales de Azure
+# ==========================
 TENANT_ID = st.secrets["tenant_id"]
 CLIENT_ID = st.secrets["client_id"]
 CLIENT_SECRET = st.secrets["client_secret"]
 
+# ==========================
+# 📌 Configuración SharePoint
+# ==========================
+SITE_HOST = "caseonit.sharepoint.com"
+SITE_NAME = "Sutel"       # 👈 pon aquí el nombre exacto del site
+LIBRARY = "Documentos"    # 👈 normalmente "Documentos" en español
+
+# ==========================
+# 🎟️ Obtener token
+# ==========================
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 SCOPE = ["https://graph.microsoft.com/.default"]
 
-# =========================
-# 1. Obtener token
-# =========================
 app = msal.ConfidentialClientApplication(
     CLIENT_ID,
     authority=AUTHORITY,
-    client_credential=CLIENT_SECRET
+    client_credential=CLIENT_SECRET,
 )
+
 result = app.acquire_token_for_client(scopes=SCOPE)
-
 if "access_token" not in result:
-    st.error("❌ No se pudo obtener token")
-    st.stop()
+    raise Exception(f"❌ Error al obtener token: {result}")
 
-headers = {"Authorization": f"Bearer {result['access_token']}"}
+token = result["access_token"]
+headers = {"Authorization": f"Bearer {token}"}
 
-# =========================
-# 2. Resolver el site "Sutel"
-# =========================
-url_site = "https://graph.microsoft.com/v1.0/sites/caseonit.sharepoint.com:/sites/Sutel"
-resp_site = requests.get(url_site, headers=headers)
+print("✅ Token obtenido correctamente\n")
 
-if resp_site.status_code != 200:
-    st.error(f"❌ Error al buscar el site: {resp_site.status_code} {resp_site.text}")
-    st.stop()
+# ==========================
+# 🔍 Diagnóstico: Site
+# ==========================
+site_url = f"https://graph.microsoft.com/v1.0/sites/{SITE_HOST}:/sites/{SITE_NAME}"
+resp = requests.get(site_url, headers=headers)
+print("📌 Verificando acceso al site...")
+print("STATUS:", resp.status_code)
+print(resp.json(), "\n")
 
-site_id = resp_site.json()["id"]
-st.write("📌 Site ID:", site_id)
+if resp.status_code != 200:
+    raise SystemExit("⛔ No se pudo acceder al site, revisa permisos en Azure.")
 
-# =========================
-# 3. Obtener document libraries (drives)
-# =========================
-url_drives = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
-resp_drives = requests.get(url_drives, headers=headers)
+site_id = resp.json().get("id")
+print(f"✅ Site ID: {site_id}\n")
 
-if resp_drives.status_code != 200:
-    st.error(f"❌ Error al listar drives: {resp_drives.status_code} {resp_drives.text}")
-    st.stop()
+# ==========================
+# 🔍 Diagnóstico: Drives
+# ==========================
+drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
+drives_resp = requests.get(drive_url, headers=headers)
+print("📌 Verificando drives...")
+print("STATUS:", drives_resp.status_code)
+print(drives_resp.json(), "\n")
 
-drives = resp_drives.json().get("value", [])
-drive_id = None
-for d in drives:
-    if "Documentos compartidos" in d["name"] or "Documents" in d["name"]:
-        drive_id = d["id"]
-        st.write("📂 Drive encontrado:", d["name"], "➡️ ID:", drive_id)
+if drives_resp.status_code != 200:
+    raise SystemExit("⛔ No se pudo acceder a los drives.")
 
-if not drive_id:
-    st.error("❌ No se encontró la document library 'Documentos compartidos'")
-    st.stop()
+# Buscar la biblioteca configurada
+drives = drives_resp.json().get("value", [])
+drive_id = next((d["id"] for d in drives if d["name"] == LIBRARY), None)
 
-# =========================
-# 4. Listar archivos de carpeta Masterfile
-# =========================
-url_masterfile = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/01. Documentos MedUX/Automatizacion/Masterfile:/children"
-resp_files = requests.get(url_masterfile, headers=headers)
-
-if resp_files.status_code != 200:
-    st.error(f"❌ Error al listar archivos de Masterfile: {resp_files.status_code} {resp_files.text}")
-    st.stop()
-
-files = resp_files.json().get("value", [])
-st.write("📑 Archivos en carpeta Masterfile:")
-for f in files:
-    st.write(f"- {f['name']} ({f['webUrl']})")
+if drive_id:
+    print(f"✅ Drive encontrado: {LIBRARY} → {drive_id}")
+else:
+    print(f"❌ No se encontró la biblioteca '{LIBRARY}'. Disponibles:")
+    for d in drives:
+        print("-", d["name"])
