@@ -1,6 +1,7 @@
 import requests
 import msal
 import streamlit as st
+import json
 
 # ==========================
 # 🔑 Credenciales de Azure
@@ -22,6 +23,7 @@ LIBRARY = "Documentos"    # 👈 normalmente "Documentos" en español
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 SCOPE = ["https://graph.microsoft.com/.default"]
 
+print("🔄 Obteniendo token...")
 app = msal.ConfidentialClientApplication(
     CLIENT_ID,
     authority=AUTHORITY,
@@ -30,7 +32,7 @@ app = msal.ConfidentialClientApplication(
 
 result = app.acquire_token_for_client(scopes=SCOPE)
 if "access_token" not in result:
-    raise Exception(f"❌ Error al obtener token: {result}")
+    raise Exception(f"❌ Error al obtener token: {json.dumps(result, indent=2)}")
 
 token = result["access_token"]
 headers = {"Authorization": f"Bearer {token}"}
@@ -41,25 +43,25 @@ print("✅ Token obtenido correctamente\n")
 # 🔍 Diagnóstico: Site
 # ==========================
 site_url = f"https://graph.microsoft.com/v1.0/sites/{SITE_HOST}:/sites/{SITE_NAME}"
+print(f"📌 Llamando a: {site_url}")
 resp = requests.get(site_url, headers=headers)
-print("📌 Verificando acceso al site...")
 print("STATUS:", resp.status_code)
-print(resp.json(), "\n")
+print("RESPUESTA:", json.dumps(resp.json(), indent=2), "\n")
 
 if resp.status_code != 200:
-    raise SystemExit("⛔ No se pudo acceder al site, revisa permisos en Azure.")
+    raise SystemExit("⛔ No se pudo acceder al site, revisa permisos en Azure o el nombre del site.")
 
 site_id = resp.json().get("id")
-print(f"✅ Site ID: {site_id}\n")
+print(f"✅ Site ID detectado: {site_id}\n")
 
 # ==========================
 # 🔍 Diagnóstico: Drives
 # ==========================
 drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
+print(f"📌 Llamando a: {drive_url}")
 drives_resp = requests.get(drive_url, headers=headers)
-print("📌 Verificando drives...")
 print("STATUS:", drives_resp.status_code)
-print(drives_resp.json(), "\n")
+print("RESPUESTA:", json.dumps(drives_resp.json(), indent=2), "\n")
 
 if drives_resp.status_code != 200:
     raise SystemExit("⛔ No se pudo acceder a los drives.")
