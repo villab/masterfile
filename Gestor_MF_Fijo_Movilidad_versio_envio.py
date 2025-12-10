@@ -332,7 +332,11 @@ def manejar_archivo(nombre_modo, nombre_archivo):
     gb.configure_column(ROWKEY, hide=True, editable=False)
 
     gb.configure_grid_options(
+        # Mantengo tu suppressSizeToFit y callbacks; añado DOM/scroll options para forzar scroll horizontal
         suppressSizeToFit=True,
+        domLayout="normal",                    # <-- asegurar layout normal (no autoHeight/fit)
+        suppressHorizontalScroll=False,        # <-- permitir la barra horizontal
+        suppressColumnVirtualisation=False,    # <-- evitar virtualización que a veces cambia el comportamiento de scroll
         onFirstDataRendered=JsCode("""
             function(params) {
                 setTimeout(function() {
@@ -340,7 +344,7 @@ def manejar_archivo(nombre_modo, nombre_archivo):
                         var allColumnIds = [];
                         var cols = params.columnApi.getAllColumns() || [];
                         cols.forEach(function(column) {
-                            allColumnIds.push(column.colId || column.getId && column.getId());
+                            allColumnIds.push(column.colId || (column.getId && column.getId()));
                         });
                         if (allColumnIds.length) {
                             params.columnApi.autoSizeColumns(allColumnIds);
@@ -358,7 +362,7 @@ def manejar_archivo(nombre_modo, nombre_archivo):
                         var allColumnIds = [];
                         var cols = params.columnApi.getAllColumns() || [];
                         cols.forEach(function(column) {
-                            allColumnIds.push(column.colId || column.getId && column.getId());
+                            allColumnIds.push(column.colId || (column.getId && column.getId()));
                         });
                         if (allColumnIds.length) {
                             params.columnApi.autoSizeColumns(allColumnIds);
@@ -460,4 +464,5 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
 
