@@ -344,16 +344,13 @@ def manejar_archivo(nombre_modo, nombre_archivo):
     gb.configure_grid_options(
         onFirstDataRendered=JsCode("""
             function(params) {
-                const allColumnIds = [];
-                params.columnApi.getAllColumns().forEach(col => allColumnIds.push(col.getId()));
-                params.columnApi.autoSizeColumns(allColumnIds);
-            }
-        """),
-        onGridReady=JsCode("""
-            function(params) {
-                const allColumnIds = [];
-                params.columnApi.getAllColumns().forEach(col => allColumnIds.push(col.getId()));
-                params.columnApi.autoSizeColumns(allColumnIds);
+                setTimeout(function() {
+                    let allColumnIds = [];
+                    params.columnApi.getAllColumns().forEach(function(column) {
+                        allColumnIds.push(column.getId());
+                    });
+                    params.columnApi.autoSizeColumns(allColumnIds);
+                }, 250);  // <-- delay para que Streamlit termine de renderizar
             }
         """)
     )
@@ -447,4 +444,5 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
 
