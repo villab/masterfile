@@ -20,41 +20,39 @@ import msal
 # ------ Configuración de vista ----------
 st.set_page_config(layout="wide")
 
-# --- FIX GLOBAL para evitar que AG-Grid corte el texto con 'F...' ---
-#     APLICA PARA LAS DOS TABLAS (FIJO y MOVILIDAD)
 st.markdown("""
 <style>
 
- /* Fuerza que el tab permita scroll horizontal */
+/* Permitir scroll horizontal en cada TAB */
 .stTabs [data-testid="stTabContent"] {
     overflow-x: auto !important;
 }
 
- /* Evita que el contenedor limite el ancho del grid */
+/* Evitar que Streamlit limite el ancho del grid */
 .block-container {
     padding-right: 0 !important;
     overflow-x: visible !important;
 }
 
- /* Este es el fix clave: asegura que AG-Grid pueda expandirse */
+/* El contenedor principal del AG-Grid debe expandirse */
 .ag-root-wrapper {
     width: max-content !important;
     min-width: 100% !important;
     overflow-x: auto !important;
 }
 
+/* El contenedor interno donde viven las columnas */
 .ag-center-cols-container {
     width: max-content !important;
 }
 
- /* Asegura que el viewport interno no recorte columnas */
+/* Evitar que el viewport recorte texto o columnas */
 .ag-body-viewport {
     overflow-x: auto !important;
 }
 
 </style>
 """, unsafe_allow_html=True)
-
 
 
 
@@ -334,7 +332,8 @@ def detectar_cambios(df_original, df_modificado, tipo_archivo):
     return cambios
 
 # ========= Manejo de archivos =========
-def manejar_archivo(nombre_modo, nombre_archivo):
+def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
+
     file_stream = get_file_from_sharepoint(f"{FOLDER_PATH}/{nombre_archivo}")
     df_original = pd.read_excel(file_stream, dtype={0: str, 1: str})
     df_original[ROWKEY] = np.arange(len(df_original)).astype(str)
@@ -359,42 +358,7 @@ def manejar_archivo(nombre_modo, nombre_archivo):
         domLayout="normal",                    # <-- asegurar layout normal (no autoHeight/fit)
         suppressHorizontalScroll=False,        # <-- permitir la barra horizontal
         suppressColumnVirtualisation=False,    # <-- evitar virtualización que a veces cambia el comportamiento de scroll
-        onFirstDataRendered=JsCode("""
-            function(params) {
-                setTimeout(function() {
-                    try {
-                        var allColumnIds = [];
-                        var cols = params.columnApi.getAllColumns() || [];
-                        cols.forEach(function(column) {
-                            allColumnIds.push(column.colId || (column.getId && column.getId()));
-                        });
-                        if (allColumnIds.length) {
-                            params.columnApi.autoSizeColumns(allColumnIds);
-                        }
-                    } catch (err) {
-                        console.warn("autoSize onFirstDataRendered error:", err);
-                    }
-                }, 250);
-            }
-        """),
-        onGridReady=JsCode("""
-            function(params) {
-                setTimeout(function() {
-                    try {
-                        var allColumnIds = [];
-                        var cols = params.columnApi.getAllColumns() || [];
-                        cols.forEach(function(column) {
-                            allColumnIds.push(column.colId || (column.getId && column.getId()));
-                        });
-                        if (allColumnIds.length) {
-                            params.columnApi.autoSizeColumns(allColumnIds);
-                        }
-                    } catch (err) {
-                        console.warn("autoSize onGridReady error:", err);
-                    }
-                }, 250);
-            }
-        """)
+        
     )
 
     grid_options = gb.build()
@@ -486,6 +450,7 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
 
 
 
