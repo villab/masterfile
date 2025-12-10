@@ -25,14 +25,18 @@ st.set_page_config(layout="wide")
 st.markdown("""
 <style>
 
+ /* Fuerza que el tab permita scroll horizontal */
 .stTabs [data-testid="stTabContent"] {
     overflow-x: auto !important;
 }
 
-.stTabs [data-baseweb="tab-panel"] {
-    overflow-x: auto !important;
+ /* Evita que el contenedor limite el ancho del grid */
+.block-container {
+    padding-right: 0 !important;
+    overflow-x: visible !important;
 }
 
+ /* Este es el fix clave: asegura que AG-Grid pueda expandirse */
 .ag-root-wrapper {
     width: max-content !important;
     min-width: 100% !important;
@@ -43,8 +47,14 @@ st.markdown("""
     width: max-content !important;
 }
 
+ /* Asegura que el viewport interno no recorte columnas */
+.ag-body-viewport {
+    overflow-x: auto !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
+
 
 
 
@@ -476,6 +486,7 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
 
 
 
