@@ -24,16 +24,17 @@ st.set_page_config(layout="wide")
 #     APLICA PARA LAS DOS TABLAS (FIJO y MOVILIDAD)
 st.markdown("""
 <style>
-.ag-theme-balham .ag-cell {
-    white-space: normal !important;
-    text-overflow: clip !important;
+.ag-root-wrapper {
+    width: 100% !important;
+    overflow-x: auto !important;
 }
-.ag-theme-balham .ag-header-cell-label {
-    white-space: normal !important;
-    text-overflow: clip !important;
+
+.ag-center-cols-container {
+    width: max-content !important;
 }
 </style>
 """, unsafe_allow_html=True)
+
 
 st.title("📋 Masterfile Entorno de medición Fijo y Movilidad")
 
@@ -459,3 +460,4 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
