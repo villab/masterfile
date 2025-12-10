@@ -337,20 +337,52 @@ def manejar_archivo(nombre_modo, nombre_archivo):
     st.success(f"📂 Cargado {nombre_archivo} ✅")
 
     gb = GridOptionsBuilder.from_dataframe(df_original)
+    # mantenemos exactamente tus opciones anteriores + robustez para autosize
     gb.configure_default_column(editable=True, resizable=True, filter=True, sortable=True, suppressMovable=True)
     gb.configure_pagination(enabled=False)
     gb.configure_column(ROWKEY, hide=True, editable=False)
 
+    # Forzar suppressSizeToFit para que sizeToFit no sobrescriba autoSizeColumns
+    # y agregar callbacks onFirstDataRendered y onGridReady con pequeño delay.
     gb.configure_grid_options(
+        suppressSizeToFit=True,
         onFirstDataRendered=JsCode("""
             function(params) {
+                // esperar un poco para que Streamlit termine layout (tabs/columns)
                 setTimeout(function() {
-                    let allColumnIds = [];
-                    params.columnApi.getAllColumns().forEach(function(column) {
-                        allColumnIds.push(column.getId());
-                    });
-                    params.columnApi.autoSizeColumns(allColumnIds);
-                }, 250);  // <-- delay para que Streamlit termine de renderizar
+                    try {
+                        var allColumnIds = [];
+                        var cols = params.columnApi.getAllColumns() || [];
+                        cols.forEach(function(column) {
+                            // usar colId si existe, fallback a getId
+                            allColumnIds.push(column.colId || column.getId && column.getId());
+                        });
+                        if (allColumnIds.length) {
+                            params.columnApi.autoSizeColumns(allColumnIds);
+                        }
+                    } catch (err) {
+                        console.warn("autoSize onFirstDataRendered error:", err);
+                    }
+                }, 250);
+            }
+        """),
+        onGridReady=JsCode("""
+            function(params) {
+                // doble check cuando el grid esté listo
+                setTimeout(function() {
+                    try {
+                        var allColumnIds = [];
+                        var cols = params.columnApi.getAllColumns() || [];
+                        cols.forEach(function(column) {
+                            allColumnIds.push(column.colId || column.getId && column.getId());
+                        });
+                        if (allColumnIds.length) {
+                            params.columnApi.autoSizeColumns(allColumnIds);
+                        }
+                    } catch (err) {
+                        console.warn("autoSize onGridReady error:", err);
+                    }
+                }, 250);
             }
         """)
     )
@@ -361,7 +393,7 @@ def manejar_archivo(nombre_modo, nombre_archivo):
         df_original,
         gridOptions=grid_options,
         height=500,
-        fit_columns_on_grid_load=True,   # <--- cambiar a True
+        fit_columns_on_grid_load=False,   # IMPORTANTE: False para permitir autoSizeColumns
         enable_enterprise_modules=False,
         update_mode=GridUpdateMode.VALUE_CHANGED,
         data_return_mode=DataReturnMode.AS_INPUT,
@@ -444,5 +476,3 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
-
-
