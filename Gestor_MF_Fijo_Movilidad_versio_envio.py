@@ -340,24 +340,31 @@ def manejar_archivo(nombre_modo, nombre_archivo):
     gb.configure_default_column(editable=True, resizable=True, filter=True, sortable=True, suppressMovable=True)
     gb.configure_pagination(enabled=False)
     gb.configure_column(ROWKEY, hide=True, editable=False)
+
     gb.configure_grid_options(
         onFirstDataRendered=JsCode("""
             function(params) {
-                let allColumnIds = [];
-                params.columnApi.getAllColumns().forEach(function(column) {
-                    allColumnIds.push(column.getId());
-                });
+                const allColumnIds = [];
+                params.columnApi.getAllColumns().forEach(col => allColumnIds.push(col.getId()));
+                params.columnApi.autoSizeColumns(allColumnIds);
+            }
+        """),
+        onGridReady=JsCode("""
+            function(params) {
+                const allColumnIds = [];
+                params.columnApi.getAllColumns().forEach(col => allColumnIds.push(col.getId()));
                 params.columnApi.autoSizeColumns(allColumnIds);
             }
         """)
     )
+
     grid_options = gb.build()
 
     grid_response = AgGrid(
         df_original,
         gridOptions=grid_options,
         height=500,
-        fit_columns_on_grid_load=False,
+        fit_columns_on_grid_load=True,   # <--- cambiar a True
         enable_enterprise_modules=False,
         update_mode=GridUpdateMode.VALUE_CHANGED,
         data_return_mode=DataReturnMode.AS_INPUT,
@@ -440,3 +447,4 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
