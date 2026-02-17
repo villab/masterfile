@@ -71,32 +71,28 @@ EMAIL_TO = get_secret("email_to")
 ID_COL = "ID SONDA"
 ROWKEY = "_row_id"
 
-#----------------- Cacheo ----------------------
 
-@st.cache_data(ttl=3000)
-def get_access_token_cached_cached():
-    return get_access_token_cached()
-
-@st.cache_data(ttl=3000)
-def get_site_drive_cached(token):
-    return get_site_drive_cached(token)
 
 
 # ========= Autenticación con MSAL =========
+@st.cache_data(ttl=3000)
 def get_access_token_cached():
     app = msal.ConfidentialClientApplication(
         CLIENT_ID,
         authority=f"https://login.microsoftonline.com/{TENANT_ID}",
         client_credential=CLIENT_SECRET
     )
-    result = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
+    result = app.acquire_token_for_client(
+        scopes=["https://graph.microsoft.com/.default"]
+    )
     if "access_token" not in result:
-        st.error(f"❌ No se pudo obtener token de acceso: {result}")
-        raise Exception("No se pudo obtener token de acceso")
+        raise Exception(f"No se pudo obtener token: {result}")
     return result["access_token"]
 
 # ========= Funciones SharePoint con Graph =========
-def get_site_drive_cached(token):
+@st.cache_data(ttl=3600)
+def get_site_drive_cached():
+    token = get_access_token_cached()
     headers = {"Authorization": f"Bearer {token}"}
 
     search_url = f"https://graph.microsoft.com/v1.0/sites?search={SITE_NAME}"
@@ -115,16 +111,9 @@ def get_site_drive_cached(token):
             site = s
             break
     if site is None:
-        for s in sites:
-            if SITE_NAME.lower() in s.get("name", "").lower():
-                site = s
-                break
-    if site is None:
         site = sites[0]
 
-    site_id = site.get("id")
-    if not site_id:
-        raise Exception(f"Site encontrado no tiene 'id': {site}")
+    site_id = site["id"]
 
     drives_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives"
     drives_resp = requests.get(drives_url, headers=headers)
@@ -132,31 +121,13 @@ def get_site_drive_cached(token):
         raise Exception(f"Error listando drives: {drives_resp.status_code} {drives_resp.text}")
 
     drives = drives_resp.json().get("value", [])
-    if not drives:
-        raise Exception("No se encontraron drives en el site.")
+    drive = drives[0]
 
-    drive = None
-    for d in drives:
-        if LIBRARY.lower() in (d.get("name") or "").lower():
-            drive = d
-            break
-    if drive is None:
-        for d in drives:
-            if "documents" in (d.get("name") or "").lower() or "documentos" in (d.get("name") or "").lower():
-                drive = d
-                break
-    if drive is None:
-        drive = drives[0]
-
-    drive_id = drive.get("id")
-    if not drive_id:
-        raise Exception(f"Drive encontrado no tiene 'id': {drive}")
-
-    return site_id, drive_id
+    return site_id, drive["id"]
 
 def get_file_from_sharepoint(path):
     token = get_access_token_cached()
-    site_id, drive_id = get_site_drive_cached(token)
+    site_id, drive_id = get_site_drive_cached()
     headers = {"Authorization": f"Bearer {token}"}
     url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/{path}:/content"
     resp = requests.get(url, headers=headers)
@@ -168,7 +139,7 @@ import time
 
 def upload_file_to_sharepoint(path, file_bytes, max_retries=5):
     token = get_access_token_cached()
-    site_id, drive_id = get_site_drive_cached(token)
+    site_id, drive_id = get_site_drive_cached()
 
     headers = {"Authorization": f"Bearer {token}"}
     url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/{path}:/content"
@@ -196,7 +167,7 @@ def upload_file_to_sharepoint(path, file_bytes, max_retries=5):
 
 def ensure_folder(path):
     token = get_access_token_cached()
-    site_id, drive_id = get_site_drive_cached(token)
+    site_id, drive_id = get_site_drive_cached()
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
     url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/{path}"
@@ -403,7 +374,7 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
         data_return_mode=DataReturnMode.AS_INPUT,
         allow_unsafe_jscode=True,
         theme="balham",
-        reload_data=True,
+        reload_data=False,
         width="100%"
     )
 
