@@ -399,15 +399,16 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
         height=500,
         fit_columns_on_grid_load=False,
         enable_enterprise_modules=False,
-        update_mode=GridUpdateMode.VALUE_CHANGED,
+        update_mode=GridUpdateMode.MODEL_CHANGED,
         data_return_mode=DataReturnMode.AS_INPUT,
         allow_unsafe_jscode=True,
         theme="balham",
-        reload_data=False,
+        reload_data=True,
         width="100%"
     )
 
-    df_modificado = pd.DataFrame(grid_response["data"])
+    df_modificado = pd.DataFrame(grid_response["data"]).copy()
+
     return df_modificado
 
 # ================== INTERFAZ PRINCIPAL ==================
