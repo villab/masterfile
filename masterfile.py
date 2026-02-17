@@ -17,6 +17,8 @@ from email.message import EmailMessage
 import requests
 import msal
 from config import get_secret
+from st_aggrid import JsCode
+
 
 
 # ------ Configuración de vista ----------
@@ -355,21 +357,24 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
     gb.configure_column(ROWKEY, hide=True, editable=False)
 
     gb.configure_grid_options(
-        # Mantengo tu suppressSizeToFit y callbacks; añado DOM/scroll options para forzar scroll horizontal
         suppressSizeToFit=True,
-        domLayout="normal",                    # <-- asegurar layout normal (no autoHeight/fit)
-        suppressHorizontalScroll=False,        # <-- permitir la barra horizontal
-        suppressColumnVirtualisation=False,    # <-- evitar virtualización que a veces cambia el comportamiento de scroll
+        domLayout="normal",
+        suppressHorizontalScroll=False,
+        suppressColumnVirtualisation=False,
+    
         onGridReady=JsCode("""
             function(params) {
-                const allColumnIds = [];
-                params.columnApi.getColumns().forEach(function(column) {
-                    allColumnIds.push(column.getId());
-                });
-                params.columnApi.autoSizeColumns(allColumnIds);
+                setTimeout(function() {
+                    const allColumnIds = [];
+                    params.columnApi.getColumns().forEach(function(column) {
+                        allColumnIds.push(column.getId());
+                    });
+                    params.columnApi.autoSizeColumns(allColumnIds);
+                }, 200);
             }
-        """)        
+        """)
     )
+
 
     grid_options = gb.build()
 
