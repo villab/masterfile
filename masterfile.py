@@ -70,8 +70,19 @@ EMAIL_TO = get_secret("email_to")
 ID_COL = "ID SONDA"
 ROWKEY = "_row_id"
 
+#----------------- Cacheo ----------------------
+
+@st.cache_data(ttl=3000)
+def get_access_token_cached_cached():
+    return get_access_token_cached()
+
+@st.cache_data(ttl=3000)
+def get_site_drive_cached(token):
+    return get_site_drive_cached(token)
+
+
 # ========= Autenticación con MSAL =========
-def get_access_token():
+def get_access_token_cached():
     app = msal.ConfidentialClientApplication(
         CLIENT_ID,
         authority=f"https://login.microsoftonline.com/{TENANT_ID}",
@@ -84,7 +95,7 @@ def get_access_token():
     return result["access_token"]
 
 # ========= Funciones SharePoint con Graph =========
-def _get_site_and_drive(token):
+def get_site_drive_cached(token):
     headers = {"Authorization": f"Bearer {token}"}
 
     search_url = f"https://graph.microsoft.com/v1.0/sites?search={SITE_NAME}"
@@ -143,8 +154,8 @@ def _get_site_and_drive(token):
     return site_id, drive_id
 
 def get_file_from_sharepoint(path):
-    token = get_access_token()
-    site_id, drive_id = _get_site_and_drive(token)
+    token = get_access_token_cached()
+    site_id, drive_id = get_site_drive_cached(token)
     headers = {"Authorization": f"Bearer {token}"}
     url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/{path}:/content"
     resp = requests.get(url, headers=headers)
@@ -153,8 +164,8 @@ def get_file_from_sharepoint(path):
     return BytesIO(resp.content)
 
 def upload_file_to_sharepoint(path, file_bytes):
-    token = get_access_token()
-    site_id, drive_id = _get_site_and_drive(token)
+    token = get_access_token_cached()
+    site_id, drive_id = get_site_drive_cached(token)
     headers = {"Authorization": f"Bearer {token}"}
     url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/{path}:/content"
     resp = requests.put(url, headers=headers, data=file_bytes.getvalue(),timeout=300)
@@ -162,8 +173,8 @@ def upload_file_to_sharepoint(path, file_bytes):
         raise Exception(f"Error subiendo archivo {path}: {resp.status_code} {resp.text}")
 
 def ensure_folder(path):
-    token = get_access_token()
-    site_id, drive_id = _get_site_and_drive(token)
+    token = get_access_token_cached()
+    site_id, drive_id = get_site_drive_cached(token)
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
     url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/{path}"
