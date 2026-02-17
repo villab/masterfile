@@ -360,7 +360,15 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
         domLayout="normal",                    # <-- asegurar layout normal (no autoHeight/fit)
         suppressHorizontalScroll=False,        # <-- permitir la barra horizontal
         suppressColumnVirtualisation=False,    # <-- evitar virtualización que a veces cambia el comportamiento de scroll
-        
+        onGridReady=JsCode("""
+            function(params) {
+                const allColumnIds = [];
+                params.columnApi.getColumns().forEach(function(column) {
+                    allColumnIds.push(column.getId());
+                });
+                params.columnApi.autoSizeColumns(allColumnIds);
+            }
+        """)        
     )
 
     grid_options = gb.build()
