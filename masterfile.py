@@ -8,6 +8,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import time
 from io import BytesIO
 from datetime import datetime
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, JsCode
@@ -163,14 +164,35 @@ def get_file_from_sharepoint(path):
         raise Exception(f"Error descargando archivo {path}: {resp.status_code} {resp.text}")
     return BytesIO(resp.content)
 
-def upload_file_to_sharepoint(path, file_bytes):
+import time
+
+def upload_file_to_sharepoint(path, file_bytes, max_retries=5):
     token = get_access_token_cached()
     site_id, drive_id = get_site_drive_cached(token)
+
     headers = {"Authorization": f"Bearer {token}"}
     url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/{path}:/content"
-    resp = requests.put(url, headers=headers, data=file_bytes.getvalue(),timeout=300)
-    if resp.status_code not in (200, 201):
+
+    for intento in range(max_retries):
+        resp = requests.put(
+            url,
+            headers=headers,
+            data=file_bytes.getvalue(),
+            timeout=300
+        )
+
+        if resp.status_code in (200, 201):
+            return
+
+        # 🔥 manejar lock
+        if resp.status_code in (423, 429, 500, 503, 504):
+            wait = 2 ** intento
+            time.sleep(wait)
+            continue
+
         raise Exception(f"Error subiendo archivo {path}: {resp.status_code} {resp.text}")
+
+    raise Exception(f"Archivo bloqueado después de {max_retries} intentos: {path}")
 
 def ensure_folder(path):
     token = get_access_token_cached()
