@@ -157,7 +157,7 @@ def upload_file_to_sharepoint(path, file_bytes):
     site_id, drive_id = _get_site_and_drive(token)
     headers = {"Authorization": f"Bearer {token}"}
     url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drives/{drive_id}/root:/{path}:/content"
-    resp = requests.put(url, headers=headers, data=file_bytes.getvalue())
+    resp = requests.put(url, headers=headers, data=file_bytes.getvalue(),timeout=300)
     if resp.status_code not in (200, 201):
         raise Exception(f"Error subiendo archivo {path}: {resp.status_code} {resp.text}")
 
