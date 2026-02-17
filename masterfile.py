@@ -25,38 +25,19 @@ from st_aggrid import JsCode
 st.set_page_config(layout="wide")
 
 st.markdown("""
-<style>
-
-/* Permitir scroll horizontal en cada TAB */
-.stTabs [data-testid="stTabContent"] {
-    overflow-x: auto !important;
-}
-
-/* Evitar que Streamlit limite el ancho del grid */
-.block-container {
-    padding-right: 0 !important;
-    overflow-x: visible !important;
-}
-
-/* El contenedor principal del AG-Grid debe expandirse */
-.ag-root-wrapper {
-    width: max-content !important;
-    min-width: 100% !important;
-    overflow-x: auto !important;
-}
-
-/* El contenedor interno donde viven las columnas */
-.ag-center-cols-container {
-    width: max-content !important;
-}
-
-/* Evitar que el viewport recorte texto o columnas */
-.ag-body-viewport {
-    overflow-x: auto !important;
-}
-
-</style>
+<div style="
+    background: linear-gradient(90deg,#0f2027,#203a43,#2c5364);
+    padding: 18px 24px;
+    border-radius: 12px;
+    margin-bottom: 10px;
+">
+    <h2 style="margin:0;">📋 Masterfile Entorno de Medición</h2>
+    <p style="margin:0;font-size:13px;opacity:0.8;">
+        Gestión de archivos Fijo y Movilidad
+    </p>
+</div>
 """, unsafe_allow_html=True)
+
 
 
 
