@@ -41,7 +41,6 @@ st.markdown("""
 
 
 
-st.title("📋 Masterfile Entorno de medición Fijo y Movilidad")
 
 # ================== CONFIGURACIÓN ==================
 TENANT_ID = get_secret("tenant_id")
