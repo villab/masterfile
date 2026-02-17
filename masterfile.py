@@ -352,7 +352,7 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
         filter=True, 
         sortable=True, 
         suppressMovable=True,
-        minWidth=130,
+        minWidth=200,
     )
     gb.configure_pagination(enabled=False)
     gb.configure_column(ROWKEY, hide=True, editable=False)
