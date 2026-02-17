@@ -31,7 +31,7 @@ st.markdown("""
     border-radius: 12px;
     margin-bottom: 10px;
 ">
-    <h2 style="margin:0;">📋 Masterfile Entorno de Medición</h2>
+    <h2 style="margin:0; color:#E5E7EB;">📋 Masterfile Entorno de Medición</h2>
     <p style="margin:0;font-size:13px;opacity:0.8;">
         Gestión de archivos Fijo y Movilidad
     </p>
