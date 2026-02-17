@@ -351,7 +351,8 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
         resizable=True, 
         filter=True, 
         sortable=True, 
-        suppressMovable=True
+        suppressMovable=True,
+        minWidth=130,
     )
     gb.configure_pagination(enabled=False)
     gb.configure_column(ROWKEY, hide=True, editable=False)
@@ -361,6 +362,7 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
         domLayout="normal",
         suppressHorizontalScroll=False,
         suppressColumnVirtualisation=False,
+        alwaysShowHorizontalScroll=True,
     
         onGridReady=JsCode("""
             function(params) {
@@ -370,7 +372,7 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
                         allColumnIds.push(column.getId());
                     });
                     params.columnApi.autoSizeColumns(allColumnIds);
-                }, 200);
+                }, 300);
             }
         """)
     )
@@ -388,7 +390,8 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
         data_return_mode=DataReturnMode.AS_INPUT,
         allow_unsafe_jscode=True,
         theme="balham",
-        reload_data=False
+        reload_data=False,
+        width="100%"
     )
 
     df_modificado = pd.DataFrame(grid_response["data"])
