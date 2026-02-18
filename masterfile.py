@@ -392,94 +392,64 @@ try:
     with tab_movilidad:
         df_movilidad = manejar_archivo("Movilidad", ARCHIVOS["Movilidad"])
 
-if st.button("💾 Guardar nueva versión de Masterfile"):
-    import time
-    t_total = time.time()
+    if st.button("💾 Guardar nueva versión de Masterfile"):
+        timestamp = datetime.now(ZoneInfo("America/Costa_Rica")).strftime("%Y%m%d_%H%M%S")
+        archivos_adjuntos = []
+        cuerpo_correo = f"Buen día,\n\nSe adjunta nueva versión de Masterfile con los cambios realizados el {timestamp}.\n\n"
 
-    timestamp = datetime.now(ZoneInfo("America/Costa_Rica")).strftime("%Y%m%d_%H%M%S")
-    archivos_adjuntos = []
-    cuerpo_correo = f"Buen día,\n\nSe adjunta nueva versión de Masterfile con los cambios realizados el {timestamp}.\n\n"
+        for nombre_modo, df_modificado, nombre_archivo in [
+            ("Fijo", df_fijo, ARCHIVOS["Fijo"]),
+            ("Movilidad", df_movilidad, ARCHIVOS["Movilidad"])
+        ]:
+            df_original_stream = get_file_from_sharepoint(f"{FOLDER_PATH}/{nombre_archivo}")
+            df_original = pd.read_excel(df_original_stream, dtype={0: str, 1: str})
+            df_original[ROWKEY] = np.arange(len(df_original)).astype(str)
 
-    for nombre_modo, df_modificado, nombre_archivo in [
-        ("Fijo", df_fijo, ARCHIVOS["Fijo"]),
-        ("Movilidad", df_movilidad, ARCHIVOS["Movilidad"])
-    ]:
+            cambios = detectar_cambios(df_original, df_modificado, nombre_modo)
+            if cambios:
+                filas_cambiadas = "\n" + "\n".join([f"• {c}" for c in cambios])
+            else:
+                filas_cambiadas = "Ningún cambio detectado"
 
-        # ⏱️ descarga original
-        t_dl = time.time()
-        df_original_stream = get_file_from_sharepoint(f"{FOLDER_PATH}/{nombre_archivo}")
-        df_original = pd.read_excel(df_original_stream, dtype={0: str, 1: str})
-        df_original[ROWKEY] = np.arange(len(df_original)).astype(str)
-        st.write(f"⏱️ {nombre_modo} download+read: {time.time() - t_dl:.2f}s")
+            cuerpo_correo += f"📌 Cambios en entorno {nombre_modo}:\n{filas_cambiadas}\n\n"
 
-        # ⏱️ detectar cambios
-        t_cmp = time.time()
-        cambios = detectar_cambios(df_original, df_modificado, nombre_modo)
-        st.write(f"⏱️ {nombre_modo} comparar: {time.time() - t_cmp:.2f}s")
+            df_a_guardar = df_modificado.copy()
+            if ROWKEY in df_a_guardar.columns:
+                df_a_guardar = df_a_guardar.drop(columns=[ROWKEY])
 
-        if cambios:
-            filas_cambiadas = "\n" + "\n".join([f"• {c}" for c in cambios])
+            nuevo_nombre = f"{nombre_archivo.replace('.xlsx','')}_{timestamp}.xlsx"
+            bytes_excel = BytesIO()
+            df_a_guardar.to_excel(bytes_excel, index=False)
+            bytes_excel.seek(0)
+
+            backup_folder = f"{FOLDER_PATH}/Backups/{nombre_modo}"
+            ensure_folder(backup_folder)
+            upload_file_to_sharepoint(f"{backup_folder}/{nuevo_nombre}", bytes_excel)
+
+            bytes_excel.seek(0)
+            upload_file_to_sharepoint(f"{FOLDER_PATH}/{nombre_archivo}", bytes_excel)
+
+            bytes_excel.seek(0)
+            archivos_adjuntos.append((BytesIO(bytes_excel.getvalue()), nuevo_nombre))
+
+        fecha_ddmmaaaa, contador_actual = _leer_contador_hoy()
+        if contador_actual == 0:
+            asunto_correo = f"Masterfile Sutel Fijo y Movilidad {fecha_ddmmaaaa}"
+            siguiente_contador = 1
         else:
-            filas_cambiadas = "Ningún cambio detectado"
+            asunto_correo = f"Masterfile Sutel y Movilidad {fecha_ddmmaaaa} V{contador_actual + 1}"
+            siguiente_contador = contador_actual + 1
 
-        cuerpo_correo += f"📌 Cambios en entorno {nombre_modo}:\n{filas_cambiadas}\n\n"
+        try:
+            enviar_correo_con_adjuntos(
+                asunto=asunto_correo,
+                cuerpo=cuerpo_correo + "Un saludo",
+                archivos_adjuntos=archivos_adjuntos
+            )
+            _guardar_contador_hoy(fecha_ddmmaaaa, siguiente_contador)
+            st.success("📧 Correo enviado notificando la nueva versión de ambos Masterfiles.")
+        except Exception as e:
+            st.error(f"Error al enviar correo: {e}")
 
-        df_a_guardar = df_modificado.copy()
-        if ROWKEY in df_a_guardar.columns:
-            df_a_guardar = df_a_guardar.drop(columns=[ROWKEY])
-
-        # ⏱️ excel a memoria
-        t_excel = time.time()
-        nuevo_nombre = f"{nombre_archivo.replace('.xlsx','')}_{timestamp}.xlsx"
-        bytes_excel = BytesIO()
-        df_a_guardar.to_excel(bytes_excel, index=False)
-        bytes_excel.seek(0)
-        st.write(f"⏱️ {nombre_modo} to_excel: {time.time() - t_excel:.2f}s")
-
-        backup_folder = f"{FOLDER_PATH}/Backups/{nombre_modo}"
-        ensure_folder(backup_folder)
-
-        # ⏱️ upload backup
-        t_up1 = time.time()
-        upload_file_to_sharepoint(f"{backup_folder}/{nuevo_nombre}", bytes_excel)
-        st.write(f"⏱️ {nombre_modo} upload backup: {time.time() - t_up1:.2f}s")
-
-        # ⏱️ upload principal
-        bytes_excel.seek(0)
-        t_up2 = time.time()
-        upload_file_to_sharepoint(f"{FOLDER_PATH}/{nombre_archivo}", bytes_excel)
-        st.write(f"⏱️ {nombre_modo} upload principal: {time.time() - t_up2:.2f}s")
-
-        bytes_excel.seek(0)
-        archivos_adjuntos.append((BytesIO(bytes_excel.getvalue()), nuevo_nombre))
-
-    fecha_ddmmaaaa, contador_actual = _leer_contador_hoy()
-
-    if contador_actual == 0:
-        asunto_correo = f"Masterfile Sutel Fijo y Movilidad {fecha_ddmmaaaa}"
-        siguiente_contador = 1
-    else:
-        asunto_correo = f"Masterfile Sutel y Movilidad {fecha_ddmmaaaa} V{contador_actual + 1}"
-        siguiente_contador = contador_actual + 1
-
-    # ⏱️ correo
-    try:
-        t_mail = time.time()
-        enviar_correo_con_adjuntos(
-            asunto=asunto_correo,
-            cuerpo=cuerpo_correo + "Un saludo",
-            archivos_adjuntos=archivos_adjuntos
-        )
-        st.write(f"⏱️ envío correo: {time.time() - t_mail:.2f}s")
-
-        _guardar_contador_hoy(fecha_ddmmaaaa, siguiente_contador)
-        st.success("📧 Correo enviado notificando la nueva versión de ambos Masterfiles.")
-
-    except Exception as e:
-        st.error(f"Error al enviar correo: {e}")
-
-    st.write(f"🚀 TOTAL: {time.time() - t_total:.2f}s")
-
-
-
-
+except Exception as e:
+    st.error(f"Error: {e}")
