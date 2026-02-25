@@ -23,7 +23,12 @@ from st_aggrid import JsCode
 
 
 # ------ Configuración de vista ----------
-st.set_page_config(layout="wide")
+# ------ Configuración de vista ----------
+st.set_page_config(
+    page_title="Masterfile Sutel", # Nombre
+    page_icon="📋",                # 
+    layout="wide"
+)
 
 st.markdown("""
 <div style="
