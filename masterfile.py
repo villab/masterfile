@@ -347,7 +347,7 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
     with col_btn:
         # Alineamos el botón a la derecha usando un contenedor vacío para empujar si fuera necesario
         st.download_button(
-            label=f"📥 Descargar Original",
+            label=f"Descargar Archivo Original",
             data=contenido_binario,
             file_name=nombre_archivo,
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
