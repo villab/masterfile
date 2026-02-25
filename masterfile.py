@@ -338,17 +338,23 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
     df_original = pd.read_excel(file_stream, dtype={0: str, 1: str})
     df_original[ROWKEY] = np.arange(len(df_original)).astype(str)
 
-    st.success(f"📂 Cargado {nombre_archivo} ✅")
-
-    # --- NUEVO: Botón de descarga del archivo original ---
-    st.download_button(
-        label=f"📥 Descargar versión cargada de ({nombre_modo})",
-        data=contenido_binario,
-        file_name=nombre_archivo,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key=f"download_btn_{nombre_modo}" # Key única para evitar errores de Streamlit
-    )
-    # -----------------------------------------------------
+    # --- DISEÑO SUPERIOR (Mensaje a la izquierda, Botón a la derecha) ---
+    col_msg, col_btn = st.columns([3, 1]) 
+    
+    with col_msg:
+        st.success(f"📂 Cargado {nombre_archivo} ✅")
+        
+    with col_btn:
+        # Alineamos el botón a la derecha usando un contenedor vacío para empujar si fuera necesario
+        st.download_button(
+            label=f"📥 Descargar Original",
+            data=contenido_binario,
+            file_name=nombre_archivo,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"download_btn_{nombre_modo}",
+            use_container_width=True # Hace que el botón ocupe todo el ancho de la columna pequeña
+        )
+    # ----------------------------------------------------------------------
 
     gb = GridOptionsBuilder.from_dataframe(df_original)
 
