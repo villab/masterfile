@@ -327,11 +327,28 @@ def detectar_cambios(df_original, df_modificado, tipo_archivo):
 # ========= Manejo de archivos =========
 def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
 
+    # 1. Obtenemos el flujo de datos desde SharePoint
     file_stream = get_file_from_sharepoint(f"{FOLDER_PATH}/{nombre_archivo}")
+    
+    # 2. Guardamos el contenido binario EXACTO para la descarga local
+    contenido_binario = file_stream.getvalue()
+
+    # 3. Leemos el DataFrame (importante hacer seek(0) para resetear el puntero)
+    file_stream.seek(0)
     df_original = pd.read_excel(file_stream, dtype={0: str, 1: str})
     df_original[ROWKEY] = np.arange(len(df_original)).astype(str)
 
     st.success(f"📂 Cargado {nombre_archivo} ✅")
+
+    # --- NUEVO: Botón de descarga del archivo original ---
+    st.download_button(
+        label=f"📥 Descargar versión cargada de ({nombre_modo})",
+        data=contenido_binario,
+        file_name=nombre_archivo,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key=f"download_btn_{nombre_modo}" # Key única para evitar errores de Streamlit
+    )
+    # -----------------------------------------------------
 
     gb = GridOptionsBuilder.from_dataframe(df_original)
 
@@ -366,7 +383,6 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
         """)
     )
 
-
     grid_options = gb.build()
 
     grid_response = AgGrid(
@@ -386,7 +402,6 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
     df_modificado = pd.DataFrame(grid_response["data"]).copy()
 
     return df_modificado
-
 # ================== INTERFAZ PRINCIPAL ==================
 try:
     tab_fijo, tab_movilidad = st.tabs(["📄 Masterfile Fijo", "📄 Masterfile Movilidad"])
