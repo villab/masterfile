@@ -374,6 +374,7 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
         domLayout="normal",
         suppressHorizontalScroll=False,
         suppressColumnVirtualisation=True,
+        suppressRowVirtualisation=True,
         alwaysShowHorizontalScroll=True,
     
         onGridReady=JsCode("""
@@ -394,7 +395,7 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
     grid_response = AgGrid(
         df_original,
         gridOptions=grid_options,
-        height=500,
+        height=600,
         fit_columns_on_grid_load=False,
         enable_enterprise_modules=False,
         update_mode=GridUpdateMode.MODEL_CHANGED,
@@ -402,7 +403,7 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
         allow_unsafe_jscode=True,
         theme="balham",
         reload_data=True,  
-        key=f"ag_grid_{nombre_modo}",
+        key=f"ag_grid_v2_{nombre_modo}",
         width="100%"
     )
 
