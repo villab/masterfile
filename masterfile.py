@@ -373,7 +373,7 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
         suppressSizeToFit=True,
         domLayout="normal",
         suppressHorizontalScroll=False,
-        suppressColumnVirtualisation=False,
+        suppressColumnVirtualisation=True,
         alwaysShowHorizontalScroll=True,
     
         onGridReady=JsCode("""
