@@ -401,7 +401,8 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
         data_return_mode=DataReturnMode.AS_INPUT,
         allow_unsafe_jscode=True,
         theme="balham",
-        reload_data=False,
+        reload_data=True,  
+        key=f"ag_grid_{nombre_modo}",
         width="100%"
     )
 
