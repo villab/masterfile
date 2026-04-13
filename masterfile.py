@@ -154,23 +154,59 @@ def detectar_cambios(df_orig, df_mod, tipo):
 def manejar_archivo(nombre_modo, nombre_archivo):
     file_stream = get_file_from_sharepoint(f"{FOLDER_PATH}/{nombre_archivo}")
     contenido_binario = file_stream.getvalue()
+    
     df = pd.read_excel(file_stream).fillna('')
     df = df.astype(object)
     df[ROWKEY] = np.arange(len(df)).astype(str)
 
-    # --- FILTROS EN SIDEBAR ---
-    st.sidebar.subheader(f"🔍 Filtros {nombre_modo}")
-    df_filtrado = df.copy()
-    
-    # Columnas sugeridas para filtrar (Ajusta según tus necesidades)
-    cols_filtros = ["PROVINCIA", "CANTON", "OPERADOR", "TECNOLOGIA", "ESTADO"]
-    for col in cols_filtros:
-        if col in df.columns:
-            opciones = sorted([str(x) for x in df[col].unique() if x != ''])
-            sel = st.sidebar.multiselect(f"{col}", opciones, key=f"f_{nombre_modo}_{col}")
-            if sel:
-                df_filtrado = df_filtrado[df_filtrado[col].astype(str).isin(sel)]
+    # --- DISEÑO SUPERIOR ---
+    col_msg, col_btn = st.columns([3, 1])
+    with col_msg: st.success(f"📂 {nombre_archivo} cargado.")
+    with col_btn: st.download_button("Descargar Excel", data=contenido_binario, file_name=nombre_archivo, key=f"dl_{nombre_modo}")
 
+    # --- SECCIÓN DE FILTROS AVANZADOS (Justo encima de la tabla) ---
+    with st.expander(f"🛠️ Filtros Avanzados para {nombre_modo}", expanded=False):
+        c1, c2, c3 = st.columns(3)
+        df_filtrado = df.copy()
+        
+        # Filtro 1: Operador (Basado en tu imagen)
+        if "Operador" in df.columns:
+            ops = sorted(df["Operador"].unique().tolist())
+            sel_op = c1.multiselect("Filtrar por Operador", ops, key=f"f1_{nombre_modo}")
+            if sel_op:
+                df_filtrado = df_filtrado[df_filtrado["Operador"].isin(sel_op)]
+        
+        # Filtro 2: Tarea (Basado en tu imagen)
+        if "Tarea" in df.columns:
+            tareas = sorted(df["Tarea"].unique().tolist())
+            sel_tarea = c2.multiselect("Filtrar por Tarea", tareas, key=f"f2_{nombre_modo}")
+            if sel_tarea:
+                df_filtrado = df_filtrado[df_filtrado["Tarea"].isin(sel_tarea)]
+
+        # Filtro 3: Tipo
+        if "Tipo" in df.columns:
+            tipos = sorted(df["Tipo"].unique().tolist())
+            sel_tipo = c3.multiselect("Filtrar por Tipo", tipos, key=f"f3_{nombre_modo}")
+            if sel_tipo:
+                df_filtrado = df_filtrado[df_filtrado["Tipo"].isin(sel_tipo)]
+
+    # --- TABLA EDITABLE ---
+    df_editado_vista = st.data_editor(
+        df_filtrado,
+        hide_index=True,
+        column_config={ROWKEY: None},
+        use_container_width=True,
+        height=500,
+        key=f"ed_{nombre_modo}"
+    )
+
+    # Sincronización de cambios
+    if not df_editado_vista.equals(df_filtrado):
+        df.set_index(ROWKEY, inplace=True)
+        df.update(df_editado_vista.set_index(ROWKEY))
+        df.reset_index(inplace=True)
+    
+    return df
     # --- INTERFAZ ---
     col_msg, col_btn = st.columns([3, 1])
     with col_msg: st.info(f"📂 {nombre_archivo} | {len(df_filtrado)} filas filtradas.")
