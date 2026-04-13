@@ -332,21 +332,16 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
     file_stream.seek(0)
     
     # 2. Lectura inicial
-    df_original = pd.read_excel(file_stream)
+    df_original = pd.read_excel(file_stream).fillna('')
 
-    # --- LIMPIEZA TOTAL PARA EVITAR LARGEUTF8 ---
-    # Convertimos a string, eliminamos nulos y quitamos caracteres que rompan Arrow
-    df_original = df_original.astype(str).replace(['nan', 'None', 'NaT'], '')
+
+    # Esto convierte el DataFrame en una lista de diccionarios plana
+    # eliminando cualquier rastro de metadatos de PyArrow
+    datos_dict = df_original.to_dict('records')
+    df_final = pd.DataFrame(datos_dict)
     
-    # Eliminamos caracteres no ASCII que a veces causan que se detecte como LargeUtf8
-    for col in df_original.columns:
-        df_original[col] = df_original[col].apply(
-            lambda x: "".join(i for i in str(x) if ord(i) < 128)
-        )
-
-    # Reconstrucción del objeto
-    df_original = pd.DataFrame(df_original.to_dict())
-    df_original[ROWKEY] = [str(i) for i in range(len(df_original))]
+    # Asegura el ROWKEY
+    df_final[ROWKEY] = [str(i) for i in range(len(df_final))]
 
 
     # --- DISEÑO SUPERIOR (Mensaje a la izquierda, Botón a la derecha) ---
@@ -404,7 +399,7 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
     grid_options = gb.build()
 
     grid_response = AgGrid(
-        df_original,
+        df_final,
         gridOptions=grid_options,
         height=600,
         fit_columns_on_grid_load=False,
@@ -414,7 +409,7 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
         allow_unsafe_jscode=True,
         theme="balham",
         reload_data=True,  
-        key=f"grid_force_render_{nombre_modo}_{int(time.time())}",
+        key=f"grid_LEGACY_FIX_{nombre_modo}_{int(time.time())}",
         width="100%"
     )
 
