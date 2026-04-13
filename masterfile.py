@@ -338,15 +338,13 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
     df_original = pd.read_excel(file_stream, dtype={0: str, 1: str})
 
     # --- SOLUCIÓN AL ERROR LargeUtf8 ---
-    # Convertimos todas las columnas de texto a formato compatible
-    for col in df_original.columns:
-        # Convertimos todo a tipo objeto de Python (str estándar)
-        df_original[col] = df_original[col].astype(object)
-        
-        # Opcional: Si hay valores nulos, los convertimos a un string vacío para evitar errores
-        df_original[col] = df_original[col].apply(lambda x: "" if pd.isna(x) else x)
+    # --- SOLUCIÓN RADICAL AL ERROR LargeUtf8 ---
+    # 1. Convertimos el DataFrame a texto puro para eliminar tipos complejos de Arrow
+    df_original = df_original.astype(str).replace(['nan', 'None', 'NaT'], '')
 
-
+    # 2. RECONSTRUCCIÓN: Lo convertimos a diccionario y luego otra vez a DataFrame.
+    # Esto "aplana" los datos y elimina cualquier rastro del error LargeUtf8.
+    df_original = pd.DataFrame.from_dict(df_original.to_dict())
     
     df_original[ROWKEY] = np.arange(len(df_original)).astype(str)
 
@@ -415,7 +413,7 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
         allow_unsafe_jscode=True,
         theme="balham",
         reload_data=True,  
-        key=f"ag_grid_v3_{nombre_modo}",
+        key=f"ag_grid_v4_{nombre_modo}",
         width="100%"
     )
 
