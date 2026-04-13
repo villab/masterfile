@@ -326,27 +326,28 @@ def detectar_cambios(df_original, df_modificado, tipo_archivo):
 
 # ========= Manejo de archivos =========
 def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
-
-    # 1. Obtenemos el flujo de datos desde SharePoint
+    # 1. Descarga desde SharePoint
     file_stream = get_file_from_sharepoint(f"{FOLDER_PATH}/{nombre_archivo}")
-    
-    # 2. Guardamos el contenido binario EXACTO para la descarga local
     contenido_binario = file_stream.getvalue()
-
-    # 3. Leemos el DataFrame (importante hacer seek(0) para resetear el puntero)
     file_stream.seek(0)
-    df_original = pd.read_excel(file_stream, dtype={0: str, 1: str})
-
-    # --- SOLUCIÓN AL ERROR LargeUtf8 ---
-    # --- SOLUCIÓN RADICAL AL ERROR LargeUtf8 ---
-    # 1. Convertimos el DataFrame a texto puro para eliminar tipos complejos de Arrow
-    df_original = df_original.astype(str).replace(['nan', 'None', 'NaT'], '')
-
-    # 2. RECONSTRUCCIÓN: Lo convertimos a diccionario y luego otra vez a DataFrame.
-    # Esto "aplana" los datos y elimina cualquier rastro del error LargeUtf8.
-    df_original = pd.DataFrame.from_dict(df_original.to_dict())
     
-    df_original[ROWKEY] = np.arange(len(df_original)).astype(str)
+    # 2. Lectura inicial
+    df_original = pd.read_excel(file_stream)
+
+    # --- LIMPIEZA TOTAL PARA EVITAR LARGEUTF8 ---
+    # Convertimos a string, eliminamos nulos y quitamos caracteres que rompan Arrow
+    df_original = df_original.astype(str).replace(['nan', 'None', 'NaT'], '')
+    
+    # Eliminamos caracteres no ASCII que a veces causan que se detecte como LargeUtf8
+    for col in df_original.columns:
+        df_original[col] = df_original[col].apply(
+            lambda x: "".join(i for i in str(x) if ord(i) < 128)
+        )
+
+    # Reconstrucción del objeto
+    df_original = pd.DataFrame(df_original.to_dict())
+    df_original[ROWKEY] = [str(i) for i in range(len(df_original))]
+
 
     # --- DISEÑO SUPERIOR (Mensaje a la izquierda, Botón a la derecha) ---
     col_msg, col_btn = st.columns([3, 1]) 
@@ -413,7 +414,7 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
         allow_unsafe_jscode=True,
         theme="balham",
         reload_data=True,  
-        key=f"ag_grid_v4_{nombre_modo}",
+        key=f"grid_force_render_{nombre_modo}_{int(time.time())}",
         width="100%"
     )
 
