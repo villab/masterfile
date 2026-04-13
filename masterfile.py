@@ -181,17 +181,36 @@ def manejar_archivo(nombre_modo, nombre_archivo):
         st.download_button("Descargar última versión", data=contenido_binario, 
                            file_name=nombre_archivo, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
                            key=f"dl_{nombre_modo}", use_container_width=True)
+    
+    # --- NUEVO: BUSCADOR / FILTRO DINÁMICO ---
+    busqueda = st.text_input(f"🔍 Filtrar en {nombre_modo} (Escribe ID, Nombre o cualquier valor):", key=f"search_{nombre_modo}")
+    
+    if busqueda:
+        # Filtra el dataframe si cualquier celda contiene el texto buscado
+        mask = df.apply(lambda row: row.astype(str).str.contains(busqueda, case=False).any(), axis=1)
+        df_mostrar = df[mask]
+    else:
+        df_mostrar = df
 
-    # REEMPLAZO DE AGGRID POR DATA_EDITOR (Inmune a LargeUtf8)
+    # --- TABLA EDITABLE ---
     df_editado = st.data_editor(
-        df,
+        df_mostrar,
         hide_index=True,
-        column_config={ROWKEY: None}, # Oculta el ID interno
+        column_config={ROWKEY: None}, 
         use_container_width=True,
         height=500,
         key=f"editor_{nombre_modo}"
     )
+    
+    # Importante: Si filtramos, debemos devolver el dataframe completo con los cambios aplicados
+    # para no perder las filas que no están visibles.
+    if busqueda:
+        df.update(df_editado)
+        return df
+        
     return df_editado
+
+
 
 # ================== INTERFAZ PRINCIPAL ==================
 try:
