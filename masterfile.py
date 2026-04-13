@@ -340,8 +340,12 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
     # --- SOLUCIÓN AL ERROR LargeUtf8 ---
     # Convertimos todas las columnas de texto a formato compatible
     for col in df_original.columns:
-        if df_original[col].dtype == "string" or df_original[col].dtype == object:
-            df_original[col] = df_original[col].astype(str).replace('nan', '')
+        # Convertimos todo a tipo objeto de Python (str estándar)
+        df_original[col] = df_original[col].astype(object)
+        
+        # Opcional: Si hay valores nulos, los convertimos a un string vacío para evitar errores
+        df_original[col] = df_original[col].apply(lambda x: "" if pd.isna(x) else x)
+
 
     
     df_original[ROWKEY] = np.arange(len(df_original)).astype(str)
@@ -411,7 +415,7 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
         allow_unsafe_jscode=True,
         theme="balham",
         reload_data=True,  
-        key=f"ag_grid_v2_{nombre_modo}",
+        key=f"ag_grid_v3_{nombre_modo}",
         width="100%"
     )
 
