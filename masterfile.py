@@ -152,6 +152,7 @@ def detectar_cambios(df_orig, df_mod, tipo):
 
 # ========= Manejo de Archivo y Filtros =========
 def manejar_archivo(nombre_modo, nombre_archivo):
+    # 1. Carga de datos
     file_stream = get_file_from_sharepoint(f"{FOLDER_PATH}/{nombre_archivo}")
     contenido_binario = file_stream.getvalue()
     
@@ -164,31 +165,55 @@ def manejar_archivo(nombre_modo, nombre_archivo):
     with col_msg: st.success(f"📂 {nombre_archivo} cargado.")
     with col_btn: st.download_button("Descargar Excel", data=contenido_binario, file_name=nombre_archivo, key=f"dl_{nombre_modo}")
 
-    # --- SECCIÓN DE FILTROS AVANZADOS (Justo encima de la tabla) ---
-    with st.expander(f"🛠️ Filtros Avanzados para {nombre_modo}", expanded=False):
-        c1, c2, c3 = st.columns(3)
+    # --- SECCIÓN DE FILTROS DINÁMICOS ---
+    with st.expander(f"🔍 Panel de Filtros Personalizados - {nombre_modo}", expanded=True):
+        # Permitimos al usuario elegir qué columnas quiere usar para filtrar
+        columnas_disponibles = [c for c in df.columns if c != ROWKEY]
+        cols_a_filtrar = st.multiselect(
+            "Selecciona las columnas por las que deseas filtrar:",
+            options=columnas_disponibles,
+            default=columnas_disponibles[:3] if len(columnas_disponibles) > 3 else columnas_disponibles,
+            key=f"selector_cols_{nombre_modo}"
+        )
+
         df_filtrado = df.copy()
         
-        # Filtro 1: Operador (Basado en tu imagen)
-        if "Operador" in df.columns:
-            ops = sorted(df["Operador"].unique().tolist())
-            sel_op = c1.multiselect("Filtrar por Operador", ops, key=f"f1_{nombre_modo}")
-            if sel_op:
-                df_filtrado = df_filtrado[df_filtrado["Operador"].isin(sel_op)]
-        
-        # Filtro 2: Tarea (Basado en tu imagen)
-        if "Tarea" in df.columns:
-            tareas = sorted(df["Tarea"].unique().tolist())
-            sel_tarea = c2.multiselect("Filtrar por Tarea", tareas, key=f"f2_{nombre_modo}")
-            if sel_tarea:
-                df_filtrado = df_filtrado[df_filtrado["Tarea"].isin(sel_tarea)]
+        if cols_a_filtrar:
+            # Creamos filas de 3 columnas para que los filtros no ocupen demasiado espacio vertical
+            filas_filtros = [cols_a_filtrar[i:i + 3] for i in range(0, len(cols_a_filtrar), 3)]
+            
+            for fila in filas_filtros:
+                st_cols = st.columns(len(fila))
+                for i, col_name in enumerate(fila):
+                    opciones = sorted([str(x) for x in df[col_name].unique() if str(x).strip() != ''])
+                    seleccion = st_cols[i].multiselect(
+                        f"Filtrar {col_name}", 
+                        options=opciones, 
+                        key=f"filter_{nombre_modo}_{col_name}"
+                    )
+                    if seleccion:
+                        df_filtrado = df_filtrado[df_filtrado[col_name].astype(str).isin(seleccion)]
 
-        # Filtro 3: Tipo
-        if "Tipo" in df.columns:
-            tipos = sorted(df["Tipo"].unique().tolist())
-            sel_tipo = c3.multiselect("Filtrar por Tipo", tipos, key=f"f3_{nombre_modo}")
-            if sel_tipo:
-                df_filtrado = df_filtrado[df_filtrado["Tipo"].isin(sel_tipo)]
+    st.markdown(f"**Registros encontrados:** {len(df_filtrado)}")
+
+    # --- TABLA EDITABLE ---
+    df_editado_vista = st.data_editor(
+        df_filtrado,
+        hide_index=True,
+        column_config={ROWKEY: None},
+        use_container_width=True,
+        height=500,
+        key=f"ed_{nombre_modo}"
+    )
+
+    # Sincronización: Actualiza el dataframe original con los cambios hechos en la vista filtrada
+    if not df_editado_vista.equals(df_filtrado):
+        # Usamos el ROWKEY para asegurar que el cambio vaya a la fila correcta del original
+        df.set_index(ROWKEY, inplace=True)
+        df.update(df_editado_vista.set_index(ROWKEY))
+        df.reset_index(inplace=True)
+    
+    return df
 
     # --- TABLA EDITABLE ---
     df_editado_vista = st.data_editor(
