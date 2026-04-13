@@ -336,6 +336,14 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
     # 3. Leemos el DataFrame (importante hacer seek(0) para resetear el puntero)
     file_stream.seek(0)
     df_original = pd.read_excel(file_stream, dtype={0: str, 1: str})
+
+    # --- SOLUCIÓN AL ERROR LargeUtf8 ---
+    # Convertimos todas las columnas de texto a formato compatible
+    for col in df_original.columns:
+        if df_original[col].dtype == "string" or df_original[col].dtype == object:
+            df_original[col] = df_original[col].astype(str).replace('nan', '')
+
+    
     df_original[ROWKEY] = np.arange(len(df_original)).astype(str)
 
     # --- DISEÑO SUPERIOR (Mensaje a la izquierda, Botón a la derecha) ---
@@ -373,8 +381,8 @@ def manejar_archivo(nombre_modo, nombre_archivo, autosize=True):
         suppressSizeToFit=True,
         domLayout="normal",
         suppressHorizontalScroll=False,
-        suppressColumnVirtualisation=False,
-        suppressRowVirtualisation=False,
+        suppressColumnVirtualisation=True,
+        suppressRowVirtualisation=True,
         alwaysShowHorizontalScroll=True,
     
         onGridReady=JsCode("""
