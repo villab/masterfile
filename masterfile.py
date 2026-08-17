@@ -64,21 +64,34 @@ def get_access_token_cached():
     return result["access_token"]
 
 @st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600)
 def get_site_drive_cached():
     token = get_access_token_cached()
     headers = {"Authorization": f"Bearer {token}"}
-    sites = requests.get(f"https://graph.microsoft.com/v1.0/sites?search={SITE_NAME}", headers=headers).json().get("value", [])
+    r_sites = requests.get(f"https://graph.microsoft.com/v1.0/sites?search={SITE_NAME}", headers=headers)
+    sites = r_sites.json().get("value", [])
+    if not sites:
+        raise Exception(f"No se encontro ningun sitio para '{SITE_NAME}': {r_sites.status_code} {r_sites.text[:300]}")
     site = next((s for s in sites if SITE_HOST in s.get("webUrl", "")), sites[0])
-    drives = requests.get(f"https://graph.microsoft.com/v1.0/sites/{site['id']}/drives", headers=headers).json().get("value", [])
-    return site["id"], drives[0]["id"]
+
+    r_drives = requests.get(f"https://graph.microsoft.com/v1.0/sites/{site['id']}/drives", headers=headers)
+    drives = r_drives.json().get("value", [])
+    if not drives:
+        raise Exception(f"El sitio '{site.get('webUrl')}' no tiene drives: {r_drives.status_code} {r_drives.text[:300]}")
+    # Elegir el drive por NOMBRE (normalmente "Documents" o "Documentos") en vez de por posicion,
+    # para no depender de que drives[0] siga siendo el correcto si se agrega una libreria nueva.
+    drive = next((d for d in drives if d.get("name", "").lower() in ("documents", "documentos")), drives[0])
+    return site["id"], drive["id"]
 
 def get_file_from_sharepoint(path):
     token = get_access_token_cached()
     s_id, d_id = get_site_drive_cached()
     url = f"https://graph.microsoft.com/v1.0/sites/{s_id}/drives/{d_id}/root:/{path}:/content"
     resp = requests.get(url, headers={"Authorization": f"Bearer {token}"})
-    if resp.status_code != 200: raise Exception(f"Error descarga {path}")
+    if resp.status_code != 200:
+        raise Exception(f"Error descarga {path} — HTTP {resp.status_code}: {resp.text[:500]}")
     return BytesIO(resp.content)
+
 
 def upload_file_to_sharepoint(path, file_bytes):
     token = get_access_token_cached()
