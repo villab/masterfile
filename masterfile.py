@@ -269,6 +269,16 @@ def manejar_archivo(nombre_modo, nombre_archivo):
     return df
 
 # ================== MAIN UI ==================
+
+if st.button("🔧 Diagnostico SharePoint"):
+    token = get_access_token_cached()
+    headers = {"Authorization": f"Bearer {token}"}
+    sites = requests.get(f"https://graph.microsoft.com/v1.0/sites?search={SITE_NAME}", headers=headers).json().get("value", [])
+    st.write("Sitios encontrados:", [(s.get("name"), s.get("webUrl")) for s in sites])
+    for s in sites:
+        drives = requests.get(f"https://graph.microsoft.com/v1.0/sites/{s['id']}/drives", headers=headers).json().get("value", [])
+        st.write(f"Drives de '{s.get('webUrl')}':", [(d.get("name"), d.get("id")) for d in drives])
+
 try:
     tab1, tab2 = st.tabs(["📄 Masterfile Fijo", "📄 Masterfile Movilidad"])
 
