@@ -72,14 +72,24 @@ def get_site_drive_cached():
     sites = r_sites.json().get("value", [])
     if not sites:
         raise Exception(f"No se encontro ningun sitio para '{SITE_NAME}': {r_sites.status_code} {r_sites.text[:300]}")
-    site = next((s for s in sites if SITE_HOST in s.get("webUrl", "")), sites[0])
+
+    # Coincidencia EXACTA por nombre -- "Sutel" es substring de "ProyectoSUTEL"
+    # y "ProyectoSUTEL-MEDUX2024", asi que un "in"/substring agarra el sitio
+    # equivocado (ese era el bug: siempre caia en ProyectoSUTEL-MEDUX2024).
+    site = next(
+        (s for s in sites if s.get("name", "").strip().lower() == SITE_NAME.strip().lower()),
+        None,
+    )
+    if site is None:
+        raise Exception(
+            f"No se encontro un sitio con nombre EXACTO '{SITE_NAME}'. "
+            f"Candidatos encontrados: {[s.get('name') for s in sites]}"
+        )
 
     r_drives = requests.get(f"https://graph.microsoft.com/v1.0/sites/{site['id']}/drives", headers=headers)
     drives = r_drives.json().get("value", [])
     if not drives:
         raise Exception(f"El sitio '{site.get('webUrl')}' no tiene drives: {r_drives.status_code} {r_drives.text[:300]}")
-    # Elegir el drive por NOMBRE (normalmente "Documents" o "Documentos") en vez de por posicion,
-    # para no depender de que drives[0] siga siendo el correcto si se agrega una libreria nueva.
     drive = next((d for d in drives if d.get("name", "").lower() in ("documents", "documentos")), drives[0])
     return site["id"], drive["id"]
 
